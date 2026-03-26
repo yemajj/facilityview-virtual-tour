@@ -1149,35 +1149,32 @@ function buildHotspots(index) {
   const nodes = currentNodes();
   const current = nodes[index];
   const targets = [];
-  const connIds = (current && current.connections && current.connections.length) ? current.connections : null;
-  if (connIds) {
-    // Non-linear: use explicit connections
-    connIds.forEach(targetId => {
-      const targetIdx = nodes.findIndex(n => n.id === targetId);
-      if (targetIdx < 0) return;
-      const target = nodes[targetIdx];
-      let angle = 0;
-      if (current.mapX !== null && target.mapX !== null)
-        angle = Math.atan2(target.mapX - current.mapX, target.mapY - current.mapY);
-      targets.push({ idx: targetIdx, angle, label: target.name });
-    });
-  } else {
-    // Linear fallback: prev / next in array order
-    if (index > 0) {
-      const prev = nodes[index-1];
-      let angle = Math.PI;
-      if (current && current.mapX !== null && prev.mapX !== null)
-        angle = Math.atan2(prev.mapX - current.mapX, prev.mapY - current.mapY);
-      targets.push({ idx: index-1, angle, label: '← ' + prev.name });
-    }
-    if (index < nodes.length-1) {
-      const next = nodes[index+1];
-      let angle = 0;
-      if (current && current.mapX !== null && next.mapX !== null)
-        angle = Math.atan2(next.mapX - current.mapX, next.mapY - current.mapY);
-      targets.push({ idx: index+1, angle, label: next.name + ' →' });
-    }
+  // Always include linear prev / next
+  if (index > 0) {
+    const prev = nodes[index-1];
+    let angle = Math.PI;
+    if (current && current.mapX !== null && prev.mapX !== null)
+      angle = Math.atan2(prev.mapX - current.mapX, prev.mapY - current.mapY);
+    targets.push({ idx: index-1, angle, label: '← ' + prev.name });
   }
+  if (index < nodes.length-1) {
+    const next = nodes[index+1];
+    let angle = 0;
+    if (current && current.mapX !== null && next.mapX !== null)
+      angle = Math.atan2(next.mapX - current.mapX, next.mapY - current.mapY);
+    targets.push({ idx: index+1, angle, label: next.name + ' →' });
+  }
+  // Also add explicit connections (skip any that duplicate a linear target)
+  (current && current.connections ? current.connections : []).forEach(targetId => {
+    const targetIdx = nodes.findIndex(n => n.id === targetId);
+    if (targetIdx < 0) return;
+    if (targets.some(t => t.idx === targetIdx)) return; // already included
+    const target = nodes[targetIdx];
+    let angle = 0;
+    if (current.mapX !== null && target.mapX !== null)
+      angle = Math.atan2(target.mapX - current.mapX, target.mapY - current.mapY);
+    targets.push({ idx: targetIdx, angle, label: target.name });
+  });
   targets.forEach(t => {
     const el = document.createElement('div');
     el.className = 'hotspot';
