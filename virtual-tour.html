@@ -55,6 +55,10 @@
   .loc-item { display:flex; align-items:center; gap:8px; padding:9px 14px; cursor:pointer; transition:all 0.15s; border-left:3px solid transparent; }
   .loc-item:hover { background:rgba(240,165,0,0.05); }
   .loc-item.active { background:rgba(240,165,0,0.08); border-left-color:var(--accent); }
+  .loc-item.drag-over { border-top:2px solid var(--accent); }
+  .loc-drag-handle { cursor:grab; color:var(--muted); opacity:0; flex-shrink:0; padding:0 2px; font-size:14px; line-height:1; transition:opacity 0.15s; user-select:none; }
+  .loc-item:hover .loc-drag-handle { opacity:0.6; }
+  .loc-drag-handle:active { cursor:grabbing; }
   .loc-node-num { font-family:var(--mono); font-size:10px; color:var(--muted); background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:3px; padding:2px 5px; flex-shrink:0; min-width:32px; text-align:center; }
   .loc-item.active .loc-node-num { color:var(--accent); border-color:rgba(240,165,0,0.3); background:rgba(240,165,0,0.08); }
   .loc-info { flex:1; min-width:0; }
@@ -913,7 +917,10 @@ function buildSidebar() {
     const thumb = getThumbnail(node);
     const el = document.createElement('div');
     el.className = 'loc-item' + (i === currentNodeIdx ? ' active' : '');
+    el.draggable = true;
+    el.dataset.idx = i;
     el.innerHTML = `
+      <div class="loc-drag-handle" title="Drag to reorder">&#8801;</div>
       <div class="loc-node-num">N${String(i+1).padStart(2,'0')}</div>
       <div class="loc-thumb-wrap">${thumb ? `<img class="loc-thumb" src="${thumb}">` : ''}</div>
       <div class="loc-info">
@@ -929,8 +936,48 @@ function buildSidebar() {
         </button>
       </div>`;
     el.addEventListener('click', () => navigateTo(i));
+
+    // ── Drag-and-drop reorder ──
+    el.addEventListener('dragstart', e => {
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/plain', i);
+      setTimeout(() => el.style.opacity = '0.4', 0);
+    });
+    el.addEventListener('dragend', () => { el.style.opacity = ''; list.querySelectorAll('.loc-item').forEach(x => x.classList.remove('drag-over')); });
+    el.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; list.querySelectorAll('.loc-item').forEach(x => x.classList.remove('drag-over')); el.classList.add('drag-over'); });
+    el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+    el.addEventListener('drop', e => {
+      e.preventDefault();
+      const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
+      const toIdx   = parseInt(el.dataset.idx, 10);
+      if (fromIdx === toIdx) return;
+      reorderNode(fromIdx, toIdx);
+    });
+
     list.appendChild(el);
   });
+}
+
+function reorderNode(fromIdx, toIdx) {
+  const nodes = currentNodes();
+  // Remember which node the viewer is on by object reference
+  const activeNode = nodes[currentNodeIdx] || null;
+  // Move node
+  const [moved] = nodes.splice(fromIdx, 1);
+  nodes.splice(toIdx, 0, moved);
+  // Reassign sequential IDs
+  const oldIds = nodes.map((n, i) => { const old = n.id; n.id = 'N' + String(i+1).padStart(2,'0'); return { old, newId: n.id }; });
+  // Build old→new ID map
+  const idMap = {};
+  oldIds.forEach(({ old, newId }) => { idMap[old] = newId; });
+  // Update connections[] on every node to use new IDs
+  nodes.forEach(n => { if (n.connections) n.connections = n.connections.map(cid => idMap[cid] || cid); });
+  // Keep currentNodeIdx pointing at the same node
+  if (activeNode) currentNodeIdx = nodes.indexOf(activeNode);
+  buildSidebar();
+  drawMinimap();
+  if (mapEditorOpen) { buildEditorNodeList(); drawMapEditor(); }
+  saveRoutes();
 }
 
 // ══════════════════════════════════════════════════

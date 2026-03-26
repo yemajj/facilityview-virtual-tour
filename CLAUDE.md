@@ -10,9 +10,12 @@ FacilityView is a single-file HTML/CSS/JS virtual tour simulator for facility wo
 ## Architecture
 
 ### Rendering
-- Panoramas are rendered **pixel-by-pixel on an HTML5 Canvas** (`#panoramaCanvas`) using an equirectangular projection — no WebGL, no libraries.
+- Panoramas are rendered on `#panoramaCanvas` using an equirectangular projection.
+- **WebGL (preferred):** Fragment shader samples equirectangular texture by converting `gl_FragCoord` → yaw/pitch → UV. Context created with `preserveDrawingBuffer: true`. Falls back to 2D CPU pixel loop if WebGL unavailable.
+- WebGL state: `gl`, `glProgram`, `glTexture`, `glYawLoc`, `glPitchLoc`, `glFovLoc`, `glResLoc`, `useWebGL`. `initWebGL()` sets this up at startup.
 - A second overlay canvas (`#fadeCanvas`) handles **crossfade transitions** between nodes.
 - Rendering is triggered by `scheduleRender()` → `renderFrame()`.
+- `clearViewer()` clears either the WebGL or 2D canvas appropriately.
 
 ### Coordinate System
 - **Yaw**: radians, `0 = north/forward`. Increases clockwise (drag right = yaw increases).
@@ -27,14 +30,17 @@ routes[] = [{
   id, name, desc,
   floorplan: Image | null,
   nodes: [{
-    id,           // e.g. "N01"
+    id,              // e.g. "N01" — reassigned after reorder/delete
     name, desc,
-    image: Image, // panorama
-    mapX, mapY,   // 2D map position (null if unplaced)
+    image: Image,    // panorama
+    thumbUrl,        // lazy-generated 96×60 thumbnail data URL
+    mapX, mapY,      // 2D map position (null if unplaced)
+    connections: [], // array of node IDs for explicit (non-linear) nav links
     hotspots: [{ id, type: 'info'|'link', yaw, pitch, label, content }]
   }]
 }]
 ```
+- `connections[]` — set via Map Editor "Connect" tool. `buildHotspots()` uses these if non-empty, else falls back to linear prev/next arrows.
 
 ### Persistence
 - **IndexedDB** (`facilityview_db`, store: `tours`, key: `'main'`).
@@ -123,13 +129,22 @@ header
 
 ---
 
-## Roadmap (as of 2026-03-25)
-1. Export / Import routes as JSON files ← **next priority**
-2. Hotspot management panel (edit/reposition existing hotspots)
-3. Loading indicator for large panoramas
-4. Branching routes / non-linear navigation
-5. Thumbnail previews in sidebar
-6. Mobile pinch-to-zoom / swipe support
-7. WebGL renderer (major performance upgrade)
-8. Route duplication
-9. Electron/Tauri desktop packaging
+## Completed Features
+- Export / Import routes as JSON files
+- Hotspot management panel (edit/reposition existing hotspots)
+- Loading indicator for large panoramas
+- Branching routes / non-linear navigation (connections[])
+- Thumbnail previews in sidebar
+- Mobile pinch-to-zoom / swipe support
+- WebGL renderer (fragment shader, falls back to 2D)
+- Route duplication
+
+## Roadmap (as of 2026-03-26)
+1. Node reordering — drag nodes up/down in sidebar ← **in progress**
+2. Quiz / assessment mode — attach questions to hotspots or route end; score displayed
+3. Training session log — record which nodes were visited, timestamps, quiz scores
+4. Custom hotspot icons — choose icon/color per hotspot instead of default pin
+5. Hotspot links to external URLs — open browser tab from a link-type hotspot
+6. Undo / redo in map editor — Ctrl+Z / Ctrl+Y for node placement and connection changes
+7. Kiosk / presentation mode — full-screen, hide all editing UI, auto-advance option
+8. Multi-floor support — stack multiple floorplans per route with floor-switcher UI
