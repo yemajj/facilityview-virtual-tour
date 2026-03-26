@@ -116,7 +116,10 @@ header
 ## Git & GitHub
 - Remote: `https://github.com/yemajj/facilityview-virtual-tour`
 - Branch: `main`
-- **Commit and push after every change.**
+- **Commit and push after every logical change** — don't batch multiple features into one commit.
+- Commit as soon as a feature or fix is working, before moving on to the next task.
+- Use clean, descriptive commit messages that explain *what* changed and *why* (e.g. `"Fix hotspot bearing calculation to use real map coordinates"` not `"update code"`).
+- Never leave working changes uncommitted at the end of a session.
 
 ---
 
