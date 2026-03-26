@@ -66,6 +66,8 @@
   .loc-action-btn:hover { border-color:var(--accent); color:var(--accent); background:rgba(240,165,0,0.1); }
   .loc-action-btn.danger:hover { border-color:var(--danger); color:var(--danger); background:rgba(255,68,68,0.1); }
   .loc-action-btn svg { width:11px; height:11px; fill:currentColor; }
+  .loc-thumb-wrap { width:48px; height:30px; flex-shrink:0; overflow:hidden; border-radius:2px; background:rgba(255,255,255,0.03); border:1px solid var(--border); }
+  .loc-thumb { width:100%; height:100%; object-fit:cover; display:block; }
   .sidebar-bottom { border-top:1px solid var(--border); padding:10px 14px; display:flex; flex-direction:column; gap:6px; }
   .upload-btn { width:100%; display:flex; align-items:center; justify-content:center; gap:8px; padding:9px; background:transparent; border:1px dashed var(--border); border-radius:4px; color:var(--muted); font-family:var(--cond); font-size:11px; letter-spacing:1px; cursor:pointer; transition:all 0.2s; text-transform:uppercase; }
   .upload-btn:hover { border-color:var(--accent); color:var(--accent); background:rgba(240,165,0,0.05); }
@@ -847,6 +849,24 @@ function updateNodeCount() {
 // ══════════════════════════════════════════════════
 // SIDEBAR
 // ══════════════════════════════════════════════════
+function getThumbnail(node) {
+  if (node.thumbUrl) return node.thumbUrl;
+  if (!node.image || !node.image.complete || !node.image.naturalWidth) return null;
+  const tw = 96, th = 60; // 2× for sharpness, displayed at 48×30
+  const tmp = document.createElement('canvas');
+  tmp.width = tw; tmp.height = th;
+  const tctx = tmp.getContext('2d');
+  const iw = node.image.naturalWidth, ih = node.image.naturalHeight;
+  // Center crop: 25% of width (≈90° FOV), 33% of height (≈60° FOV)
+  const cropW = Math.round(iw / 4);
+  const cropH = Math.round(ih / 3);
+  const cropX = Math.round((iw - cropW) / 2);
+  const cropY = Math.round((ih - cropH) / 2);
+  tctx.drawImage(node.image, cropX, cropY, cropW, cropH, 0, 0, tw, th);
+  node.thumbUrl = tmp.toDataURL('image/jpeg', 0.75);
+  return node.thumbUrl;
+}
+
 function buildSidebar() {
   const list  = document.getElementById('locationList');
   const nodes = currentNodes();
@@ -856,10 +876,12 @@ function buildSidebar() {
     return;
   }
   nodes.forEach((node, i) => {
+    const thumb = getThumbnail(node);
     const el = document.createElement('div');
     el.className = 'loc-item' + (i === currentNodeIdx ? ' active' : '');
     el.innerHTML = `
       <div class="loc-node-num">N${String(i+1).padStart(2,'0')}</div>
+      <div class="loc-thumb-wrap">${thumb ? `<img class="loc-thumb" src="${thumb}">` : ''}</div>
       <div class="loc-info">
         <div class="loc-name">${node.name}</div>
         ${node.desc ? `<div class="loc-desc">${node.desc}</div>` : ''}
