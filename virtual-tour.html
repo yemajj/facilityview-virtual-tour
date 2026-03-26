@@ -680,7 +680,11 @@ let pinchStartFov  = 75;
 let db = null;
 
 const canvas       = document.getElementById('panoramaCanvas');
-const ctx          = canvas.getContext('2d');
+let   ctx          = null;   // 2D context — only used when WebGL unavailable
+let   gl           = null;   // WebGL context (preferred)
+let   useWebGL     = false;
+// WebGL uniform/object handles (populated by initWebGL)
+let glProgram, glTexture, glYawLoc, glPitchLoc, glFovLoc, glResLoc;
 const fadeCanvas   = document.getElementById('fadeCanvas');
 const fadeCtx      = fadeCanvas.getContext('2d');
 const minimapCanvas= document.getElementById('minimapCanvas');
@@ -776,7 +780,7 @@ function selectRoute(idx) {
   buildSidebar(); drawMinimap(); updateNodeCount();
   document.getElementById('overlay').style.opacity = '0';
   document.getElementById('hotspots').style.opacity = '0';
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  clearViewer();
   if (route && route.nodes.length > 0) navigateTo(0);
 }
 
@@ -866,7 +870,7 @@ function deleteNode(nodeIdx) {
   if (!nodes.length) {
     currentNodeIdx = -1; img = null;
     document.getElementById('overlay').style.opacity = '0';
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    clearViewer();
   } else {
     navigateTo(Math.min(nodeIdx, nodes.length - 1));
   }
@@ -1010,38 +1014,62 @@ function resizeCanvas() {
   fadeCanvas.width = wrap.clientWidth; fadeCanvas.height = wrap.clientHeight;
   if (img) renderFrame();
 }
+function clearViewer() {
+  if (useWebGL) {
+    gl.clearColor(0, 0, 0, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  } else if (ctx) {
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  }
+}
 function renderFrame() {
   if (!img) return;
   const W = canvas.width, H = canvas.height;
-  ctx.clearRect(0, 0, W, H);
-  const fovRad = fov * Math.PI / 180;
-  const imgW = img.width, imgH = img.height;
-  const imageData = ctx.createImageData(W, H);
-  const data = imageData.data;
-  if (!img._pixelCache) {
-    const tmp = document.createElement('canvas');
-    tmp.width = imgW; tmp.height = imgH;
-    const tc = tmp.getContext('2d');
-    tc.drawImage(img, 0, 0);
-    img._pixelCache = tc.getImageData(0, 0, imgW, imgH).data;
-  }
-  const src = img._pixelCache;
-  const halfFovH = fovRad / 2, halfFovV = halfFovH / (W / H);
-  for (let px = 0; px < W; px++) {
-    for (let py = 0; py < H; py++) {
-      const rx = ((px/W)-0.5)*2*halfFovH, ry = ((py/H)-0.5)*2*halfFovV;
-      const lon = yaw + rx;
-      const lat = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch - ry));
-      const u = ((lon % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI) / (2*Math.PI);
-      const v = (lat + Math.PI/2) / Math.PI;
-      const sx = Math.floor(u * imgW) % imgW;
-      const sy = Math.max(0, Math.min(imgH-1, Math.floor((1-v)*imgH)));
-      const si = (sy * imgW + Math.max(0, Math.min(imgW-1, sx))) * 4;
-      const di = (py * W + px) * 4;
-      data[di]=src[si]; data[di+1]=src[si+1]; data[di+2]=src[si+2]; data[di+3]=255;
+  if (useWebGL) {
+    // Upload texture only when the panorama image changes
+    if (gl._loadedImg !== img) {
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, img);
+      gl._loadedImg = img;
     }
+    gl.viewport(0, 0, W, H);
+    gl.uniform1f(glYawLoc,   yaw);
+    gl.uniform1f(glPitchLoc, pitch);
+    gl.uniform1f(glFovLoc,   fov * Math.PI / 180);
+    gl.uniform2f(glResLoc,   W, H);
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  } else {
+    // ── 2D CPU fallback ──────────────────────────────
+    ctx.clearRect(0, 0, W, H);
+    const fovRad = fov * Math.PI / 180;
+    const imgW = img.width, imgH = img.height;
+    const imageData = ctx.createImageData(W, H);
+    const data = imageData.data;
+    if (!img._pixelCache) {
+      const tmp = document.createElement('canvas');
+      tmp.width = imgW; tmp.height = imgH;
+      const tc = tmp.getContext('2d');
+      tc.drawImage(img, 0, 0);
+      img._pixelCache = tc.getImageData(0, 0, imgW, imgH).data;
+    }
+    const src = img._pixelCache;
+    const halfFovH = fovRad / 2, halfFovV = halfFovH / (W / H);
+    for (let px = 0; px < W; px++) {
+      for (let py = 0; py < H; py++) {
+        const rx = ((px/W)-0.5)*2*halfFovH, ry = ((py/H)-0.5)*2*halfFovV;
+        const lon = yaw + rx;
+        const lat = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch - ry));
+        const u = ((lon % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI) / (2*Math.PI);
+        const v = (lat + Math.PI/2) / Math.PI;
+        const sx = Math.floor(u * imgW) % imgW;
+        const sy = Math.max(0, Math.min(imgH-1, Math.floor((1-v)*imgH)));
+        const si = (sy * imgW + Math.max(0, Math.min(imgW-1, sx))) * 4;
+        const di = (py * W + px) * 4;
+        data[di]=src[si]; data[di+1]=src[si+1]; data[di+2]=src[si+2]; data[di+3]=255;
+      }
+    }
+    ctx.putImageData(imageData, 0, 0);
   }
-  ctx.putImageData(imageData, 0, 0);
   updateHUD(); updateHotspotPositions();
   drawMinimap(); // live update for direction arrow
 }
@@ -2183,6 +2211,94 @@ function showHotspotInfo(hs) {
 }
 
 // ══════════════════════════════════════════════════
+// WEBGL RENDERER INIT
+// ══════════════════════════════════════════════════
+function initWebGL() {
+  try {
+    gl = canvas.getContext('webgl', { preserveDrawingBuffer: true })
+      || canvas.getContext('experimental-webgl', { preserveDrawingBuffer: true });
+    if (!gl) throw new Error('no context');
+
+    // ── Vertex shader: full-screen quad, position only ──
+    const VS = `
+      attribute vec2 aPos;
+      void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
+    `;
+    // ── Fragment shader: equirectangular projection ──
+    // gl_FragCoord.y is 0 at the BOTTOM (Y-up), opposite to canvas 2D.
+    // So "ry" has the opposite sign vs the 2D loop — use (pitch + ry) not (pitch - ry).
+    // UNPACK_FLIP_Y_WEBGL=true on upload means image-top → texture v=1,
+    // which matches our v = (lat + PI/2) / PI  (lat=PI/2 → zenith → v=1).
+    const FS = `
+      precision mediump float;
+      uniform sampler2D uTex;
+      uniform float uYaw, uPitch, uFov;
+      uniform vec2 uRes;
+      const float PI = 3.14159265359;
+      void main() {
+        float aspect   = uRes.x / uRes.y;
+        float halfFovH = uFov * 0.5;
+        float halfFovV = halfFovH / aspect;
+        float rx = (gl_FragCoord.x / uRes.x - 0.5) * 2.0 * halfFovH;
+        float ry = (gl_FragCoord.y / uRes.y - 0.5) * 2.0 * halfFovV;
+        float lon = uYaw + rx;
+        float lat = clamp(uPitch + ry, -PI * 0.5, PI * 0.5);
+        float u = lon / (2.0 * PI);
+        u = u - floor(u);                  // fract — handles negative yaw
+        float v = (lat + PI * 0.5) / PI;  // 0=nadir, 1=zenith
+        gl_FragColor = texture2D(uTex, vec2(u, v));
+      }
+    `;
+
+    function compile(type, src) {
+      const s = gl.createShader(type);
+      gl.shaderSource(s, src); gl.compileShader(s);
+      if (!gl.getShaderParameter(s, gl.COMPILE_STATUS))
+        throw new Error(gl.getShaderInfoLog(s));
+      return s;
+    }
+    glProgram = gl.createProgram();
+    gl.attachShader(glProgram, compile(gl.VERTEX_SHADER, VS));
+    gl.attachShader(glProgram, compile(gl.FRAGMENT_SHADER, FS));
+    gl.linkProgram(glProgram);
+    if (!gl.getProgramParameter(glProgram, gl.LINK_STATUS))
+      throw new Error(gl.getProgramInfoLog(glProgram));
+    gl.useProgram(glProgram);
+
+    // Full-screen quad as a triangle strip: BL, BR, TL, TR
+    const buf = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, buf);
+    gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1,-1, 1,-1, -1,1, 1,1]), gl.STATIC_DRAW);
+    const posLoc = gl.getAttribLocation(glProgram, 'aPos');
+    gl.enableVertexAttribArray(posLoc);
+    gl.vertexAttribPointer(posLoc, 2, gl.FLOAT, false, 0, 0);
+
+    // Uniform handles
+    glYawLoc   = gl.getUniformLocation(glProgram, 'uYaw');
+    glPitchLoc = gl.getUniformLocation(glProgram, 'uPitch');
+    glFovLoc   = gl.getUniformLocation(glProgram, 'uFov');
+    glResLoc   = gl.getUniformLocation(glProgram, 'uRes');
+    gl.uniform1i(gl.getUniformLocation(glProgram, 'uTex'), 0);
+
+    // Panorama texture — non-POT safe: CLAMP_TO_EDGE + LINEAR only
+    glTexture = gl.createTexture();
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, glTexture);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+
+    useWebGL = true;
+    console.log('WebGL renderer active');
+  } catch (e) {
+    console.warn('WebGL unavailable, using 2D fallback:', e.message);
+    gl = null;
+    ctx = canvas.getContext('2d');
+  }
+}
+
+// ══════════════════════════════════════════════════
 // LOADING INDICATOR
 // ══════════════════════════════════════════════════
 function showLoader(msg) {
@@ -2199,6 +2315,7 @@ function hideLoader() {
 async function init() {
   document.getElementById('overlay').style.opacity = '0';
   document.getElementById('hotspots').style.opacity = '0';
+  initWebGL();
   resizeCanvas();
   await openDB();
   showLoader('Loading tours...');
