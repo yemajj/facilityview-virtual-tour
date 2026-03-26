@@ -379,6 +379,10 @@
     <canvas id="panoramaCanvas"></canvas>
     <canvas id="fadeCanvas"></canvas>
     <div class="scanlines"></div>
+    <div id="noPanoramaMsg" style="display:none;position:absolute;inset:0;display:none;align-items:center;justify-content:center;flex-direction:column;gap:10px;pointer-events:none;">
+      <svg width="40" height="40" viewBox="0 0 24 24" fill="rgba(74,85,104,0.5)"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+      <span style="font-family:var(--mono);font-size:11px;color:rgba(74,85,104,0.8);letter-spacing:1px;">NO PANORAMA — click ✏ to add an image</span>
+    </div>
 
     <div class="welcome" id="welcome">
       <div class="welcome-icon">
@@ -805,7 +809,7 @@ function triggerAddNode() {
   document.getElementById('newNodeDesc').value  = '';
   document.getElementById('nodeFileLabel').textContent = 'Choose image file...';
   document.getElementById('addNodeModalSub').textContent = `Adding Node ${String(nextNum).padStart(2,'0')} to "${currentRoute().name}"`;
-  document.getElementById('confirmNodeBtn').disabled = true;
+  document.getElementById('confirmNodeBtn').disabled = false;
   pendingNodeImage = null;
   openModal('modalAddNode');
   setTimeout(() => document.getElementById('newNodeName').focus(), 100);
@@ -830,7 +834,6 @@ document.getElementById('fileInput').addEventListener('change', e => {
 });
 function cancelAddNode() { pendingNodeImage = null; closeModal('modalAddNode'); }
 function confirmAddNode() {
-  if (!pendingNodeImage) return;
   const name = document.getElementById('newNodeName').value.trim() || ('Node ' + (currentNodes().length + 1));
   const nodes = currentNodes();
   // Default map position: unplaced (null) — user places in editor
@@ -838,7 +841,7 @@ function confirmAddNode() {
     id: 'N' + String(nodes.length + 1).padStart(2,'0'),
     name,
     desc: document.getElementById('newNodeDesc').value.trim(),
-    image: pendingNodeImage,
+    image: pendingNodeImage || null,
     mapX: null, mapY: null,  // null = unplaced
     connections: [],
     hotspots: []
@@ -1077,7 +1080,13 @@ function clearViewer() {
   }
 }
 function renderFrame() {
-  if (!img) return;
+  const noPanel = document.getElementById('noPanoramaMsg');
+  if (!img) {
+    clearViewer();
+    if (noPanel) noPanel.style.display = 'flex';
+    return;
+  }
+  if (noPanel) noPanel.style.display = 'none';
   const W = canvas.width, H = canvas.height;
   if (useWebGL) {
     // Upload texture only when the panorama image changes
@@ -1964,9 +1973,12 @@ async function loadRoutes() {
           route.floorplan = fp;
         }
         rd.nodes.forEach(nd => {
-          const image = new Image();
-          promises.push(new Promise(res => { image.onload = image.onerror = res; }));
-          image.src = nd.imageSrc;
+          let image = null;
+          if (nd.imageSrc) {
+            image = new Image();
+            promises.push(new Promise(res => { image.onload = image.onerror = res; }));
+            image.src = nd.imageSrc;
+          }
           route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, connections: nd.connections || [], hotspots: nd.hotspots || [] });
         });
         routes.push(route);
@@ -2029,9 +2041,12 @@ async function importRoutes(file) {
         route.floorplan = fp;
       }
       (rd.nodes || []).forEach(nd => {
-        const image = new Image();
-        promises.push(new Promise(res => { image.onload = image.onerror = res; }));
-        image.src = nd.imageSrc;
+        let image = null;
+        if (nd.imageSrc) {
+          image = new Image();
+          promises.push(new Promise(res => { image.onload = image.onerror = res; }));
+          image.src = nd.imageSrc;
+        }
         route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, connections: nd.connections || [], hotspots: nd.hotspots || [] });
       });
       imported.push(route);
