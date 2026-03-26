@@ -1,0 +1,1692 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FacilityView — Virtual Tour Simulator</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600;700&family=Barlow+Condensed:wght@400;700&display=swap');
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  :root {
+    --bg: #0d0f12; --panel: #13171d; --border: #1e2530;
+    --accent: #f0a500; --accent2: #00c8ff; --text: #c8d4e0;
+    --muted: #4a5568; --success: #00e676; --danger: #ff4444;
+    --mono: 'Share Tech Mono', monospace;
+    --sans: 'Barlow', sans-serif; --cond: 'Barlow Condensed', sans-serif;
+    --sidebar-w: 260px;
+  }
+  body { background:var(--bg); color:var(--text); font-family:var(--sans); height:100vh; display:flex; flex-direction:column; overflow:hidden; user-select:none; }
+
+  /* HEADER */
+  header { display:flex; align-items:center; justify-content:space-between; padding:0 16px; height:48px; background:var(--panel); border-bottom:1px solid var(--border); flex-shrink:0; z-index:100; gap:12px; }
+  .header-left { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+  .logo { display:flex; align-items:center; gap:8px; font-family:var(--cond); font-size:17px; font-weight:700; letter-spacing:3px; text-transform:uppercase; color:var(--accent); }
+  .logo-icon { width:26px; height:26px; border:2px solid var(--accent); border-radius:4px; display:grid; place-items:center; }
+  .logo-icon svg { width:14px; height:14px; fill:var(--accent); }
+  .sidebar-toggle { width:32px; height:32px; background:transparent; border:1px solid var(--border); border-radius:4px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--muted); transition:all 0.15s; flex-shrink:0; }
+  .sidebar-toggle:hover { border-color:var(--accent); color:var(--accent); background:rgba(240,165,0,0.07); }
+  .sidebar-toggle svg { width:16px; height:16px; fill:currentColor; }
+  .route-selector-wrap { display:flex; align-items:center; gap:8px; flex:1; min-width:0; max-width:440px; }
+  .route-label { font-family:var(--mono); font-size:9px; letter-spacing:2px; color:var(--muted); text-transform:uppercase; white-space:nowrap; flex-shrink:0; }
+  .route-select { flex:1; min-width:0; background:var(--bg); border:1px solid var(--border); border-radius:3px; color:var(--text); font-family:var(--cond); font-size:13px; font-weight:700; letter-spacing:1px; padding:5px 24px 5px 10px; cursor:pointer; outline:none; appearance:none; background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath fill='%234a5568' d='M0 0l5 6 5-6z'/%3E%3C/svg%3E"); background-repeat:no-repeat; background-position:right 8px center; transition:border-color 0.15s; }
+  .route-select:hover, .route-select:focus { border-color:var(--accent); }
+  .route-select option { background:#1a1f28; }
+  .btn-icon-text { display:flex; align-items:center; gap:6px; padding:5px 12px; background:transparent; border:1px solid var(--border); border-radius:3px; color:var(--muted); font-family:var(--cond); font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; cursor:pointer; white-space:nowrap; flex-shrink:0; transition:all 0.15s; }
+  .btn-icon-text:hover { border-color:var(--accent2); color:var(--accent2); background:rgba(0,200,255,0.05); }
+  .btn-icon-text.accent:hover { border-color:var(--accent); color:var(--accent); background:rgba(240,165,0,0.05); }
+  .btn-icon-text svg { width:12px; height:12px; fill:currentColor; }
+  .header-right { display:flex; align-items:center; gap:10px; flex-shrink:0; }
+  .status-dot { width:8px; height:8px; border-radius:50%; background:var(--success); box-shadow:0 0 8px var(--success); animation:pulse 2s ease-in-out infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:0.4} }
+  .status-label { font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:1px; }
+
+  /* MAIN */
+  .main { display:flex; flex:1; overflow:hidden; }
+
+  /* SIDEBAR */
+  .sidebar { width:var(--sidebar-w); background:var(--panel); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; overflow:hidden; transition:width 0.25s cubic-bezier(0.4,0,0.2,1), opacity 0.2s ease; }
+  .sidebar.collapsed { width:0; opacity:0; pointer-events:none; }
+  .sidebar-header { display:flex; align-items:center; justify-content:space-between; padding:10px 14px 8px; border-bottom:1px solid var(--border); flex-shrink:0; }
+  .sidebar-title { font-family:var(--mono); font-size:9px; letter-spacing:2px; color:var(--muted); text-transform:uppercase; }
+  .sidebar-route-badge { font-family:var(--mono); font-size:9px; padding:2px 7px; border-radius:2px; background:rgba(240,165,0,0.12); color:var(--accent); border:1px solid rgba(240,165,0,0.25); max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .location-list { flex:1; overflow-y:auto; padding:6px 0; }
+  .location-list::-webkit-scrollbar { width:4px; }
+  .location-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+  .loc-item { display:flex; align-items:center; gap:8px; padding:9px 14px; cursor:pointer; transition:all 0.15s; border-left:3px solid transparent; }
+  .loc-item:hover { background:rgba(240,165,0,0.05); }
+  .loc-item.active { background:rgba(240,165,0,0.08); border-left-color:var(--accent); }
+  .loc-node-num { font-family:var(--mono); font-size:10px; color:var(--muted); background:rgba(255,255,255,0.04); border:1px solid var(--border); border-radius:3px; padding:2px 5px; flex-shrink:0; min-width:32px; text-align:center; }
+  .loc-item.active .loc-node-num { color:var(--accent); border-color:rgba(240,165,0,0.3); background:rgba(240,165,0,0.08); }
+  .loc-info { flex:1; min-width:0; }
+  .loc-name { font-family:var(--cond); font-size:13px; font-weight:700; letter-spacing:0.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .loc-desc { font-size:10px; color:var(--muted); margin-top:1px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+  .loc-actions { display:flex; gap:4px; flex-shrink:0; opacity:0; transition:opacity 0.15s; }
+  .loc-item:hover .loc-actions { opacity:1; }
+  .loc-action-btn { width:22px; height:22px; background:transparent; border:1px solid var(--border); border-radius:3px; display:flex; align-items:center; justify-content:center; cursor:pointer; color:var(--muted); transition:all 0.15s; }
+  .loc-action-btn:hover { border-color:var(--accent); color:var(--accent); background:rgba(240,165,0,0.1); }
+  .loc-action-btn.danger:hover { border-color:var(--danger); color:var(--danger); background:rgba(255,68,68,0.1); }
+  .loc-action-btn svg { width:11px; height:11px; fill:currentColor; }
+  .sidebar-bottom { border-top:1px solid var(--border); padding:10px 14px; display:flex; flex-direction:column; gap:6px; }
+  .upload-btn { width:100%; display:flex; align-items:center; justify-content:center; gap:8px; padding:9px; background:transparent; border:1px dashed var(--border); border-radius:4px; color:var(--muted); font-family:var(--cond); font-size:11px; letter-spacing:1px; cursor:pointer; transition:all 0.2s; text-transform:uppercase; }
+  .upload-btn:hover { border-color:var(--accent); color:var(--accent); background:rgba(240,165,0,0.05); }
+  #fileInput { display:none; }
+  #floorplanInput { display:none; }
+  .node-count { font-family:var(--mono); font-size:9px; color:var(--muted); text-align:center; letter-spacing:1px; }
+  .node-count span { color:var(--accent2); }
+
+  /* VIEWER */
+  .viewer-wrap { flex:1; position:relative; overflow:hidden; background:#050709; }
+  #panoramaCanvas { width:100%; height:100%; cursor:grab; display:block; }
+  #panoramaCanvas.dragging { cursor:grabbing; }
+  .scanlines { position:absolute; inset:0; pointer-events:none; z-index:5; background:repeating-linear-gradient(0deg,transparent,transparent 2px,rgba(0,0,0,0.03) 2px,rgba(0,0,0,0.03) 4px); }
+  .overlay { position:absolute; inset:0; pointer-events:none; }
+  .corner { position:absolute; width:24px; height:24px; }
+  .corner::before, .corner::after { content:''; position:absolute; background:var(--accent); }
+  .corner::before { width:100%; height:2px; top:0; }
+  .corner::after { width:2px; height:100%; top:0; }
+  .corner.tl { top:16px; left:16px; }
+  .corner.tr { top:16px; right:16px; transform:scaleX(-1); }
+  .corner.bl { bottom:16px; left:16px; transform:scaleY(-1); }
+  .corner.br { bottom:16px; right:16px; transform:scale(-1); }
+  .loc-display { position:absolute; top:22px; left:50%; transform:translateX(-50%); text-align:center; pointer-events:none; }
+  .loc-display-node { font-family:var(--mono); font-size:10px; color:var(--accent); letter-spacing:3px; text-transform:uppercase; margin-bottom:2px; }
+  .loc-display-name { font-family:var(--cond); font-size:20px; font-weight:700; letter-spacing:4px; text-transform:uppercase; color:#fff; text-shadow:0 0 20px rgba(240,165,0,0.5); }
+  .loc-display-sub { font-family:var(--mono); font-size:9px; color:rgba(255,255,255,0.4); letter-spacing:2px; margin-top:2px; }
+  .compass { position:absolute; top:20px; right:20px; width:60px; height:60px; pointer-events:none; }
+  .compass-ring { position:absolute; inset:0; border:1px solid rgba(240,165,0,0.3); border-radius:50%; }
+  .compass-inner { position:absolute; inset:8px; border:1px solid rgba(240,165,0,0.12); border-radius:50%; }
+  .compass-needle { width:2px; height:30px; position:absolute; left:50%; top:50%; transform-origin:50% 100%; transform:translateX(-50%) translateY(-100%); transition:transform 0.1s linear; }
+  .compass-needle::before { content:''; position:absolute; top:0; left:-2px; width:6px; height:13px; background:var(--accent); clip-path:polygon(50% 0%,100% 100%,0% 100%); }
+  .compass-needle::after { content:''; position:absolute; bottom:0; left:-2px; width:6px; height:13px; background:var(--muted); clip-path:polygon(0% 0%,100% 0%,50% 100%); }
+  .compass-n { position:absolute; top:-2px; left:50%; transform:translateX(-50%); font-family:var(--mono); font-size:8px; color:var(--accent); }
+  .route-progress { position:absolute; top:0; left:0; right:0; height:3px; background:rgba(255,255,255,0.05); pointer-events:none; }
+  .route-progress-fill { height:100%; background:var(--accent); transition:width 0.4s cubic-bezier(0.4,0,0.2,1); box-shadow:0 0 8px rgba(240,165,0,0.6); }
+  .route-nav { position:absolute; bottom:80px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:12px; pointer-events:all; }
+  .route-nav-btn { display:flex; align-items:center; gap:8px; padding:8px 16px; background:rgba(13,15,18,0.85); border:1px solid var(--border); border-radius:4px; color:var(--muted); font-family:var(--cond); font-size:12px; font-weight:700; letter-spacing:1px; text-transform:uppercase; cursor:pointer; backdrop-filter:blur(8px); transition:all 0.15s; }
+  .route-nav-btn:hover:not(:disabled) { border-color:var(--accent); color:var(--accent); background:rgba(240,165,0,0.1); }
+  .route-nav-btn:disabled { opacity:0.25; cursor:not-allowed; }
+  .route-nav-btn svg { width:14px; height:14px; fill:currentColor; }
+  .route-nav-pos { font-family:var(--mono); font-size:11px; color:var(--muted); padding:0 4px; white-space:nowrap; }
+  .route-nav-pos span { color:var(--accent2); }
+  .hotspot { position:absolute; pointer-events:all; cursor:pointer; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; gap:6px; }
+  .hotspot-arrow { width:46px; height:46px; background:rgba(240,165,0,0.15); border:2px solid var(--accent); border-radius:50%; display:flex; align-items:center; justify-content:center; transition:all 0.2s; animation:hotspot-bob 2s ease-in-out infinite; }
+  @keyframes hotspot-bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-4px)} }
+  .hotspot:hover .hotspot-arrow { background:rgba(240,165,0,0.3); box-shadow:0 0 20px rgba(240,165,0,0.4); }
+  .hotspot-arrow svg { width:20px; height:20px; fill:var(--accent); }
+  .hotspot-label { font-family:var(--cond); font-size:10px; font-weight:700; letter-spacing:1px; color:#fff; text-transform:uppercase; background:rgba(13,15,18,0.8); padding:2px 8px; border-radius:2px; border:1px solid var(--border); white-space:nowrap; backdrop-filter:blur(4px); }
+  .info-panel { position:absolute; bottom:80px; left:20px; background:rgba(13,15,18,0.85); border:1px solid var(--border); border-left:3px solid var(--accent); padding:10px 14px; pointer-events:none; backdrop-filter:blur(8px); min-width:170px; }
+  .info-panel-title { font-family:var(--mono); font-size:9px; letter-spacing:2px; color:var(--muted); text-transform:uppercase; margin-bottom:5px; }
+  .info-panel-val { font-family:var(--mono); font-size:12px; color:var(--accent2); }
+  .info-panel-row { display:flex; gap:12px; margin-top:5px; }
+  .info-stat-label { font-family:var(--mono); font-size:8px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; }
+  .info-stat-val { font-family:var(--mono); font-size:11px; color:var(--text); margin-top:1px; }
+
+  /* MINIMAP */
+  .minimap { position:absolute; bottom:80px; right:20px; width:160px; background:rgba(13,15,18,0.88); border:1px solid var(--border); backdrop-filter:blur(8px); pointer-events:none; overflow:hidden; }
+  .minimap-header { display:flex; align-items:center; justify-content:space-between; padding:5px 8px 4px; border-bottom:1px solid var(--border); }
+  .minimap-title { font-family:var(--mono); font-size:8px; letter-spacing:2px; color:var(--muted); text-transform:uppercase; }
+  .minimap-edit-btn { font-family:var(--mono); font-size:8px; color:var(--accent2); letter-spacing:1px; background:none; border:none; cursor:pointer; padding:0; pointer-events:all; text-transform:uppercase; transition:color 0.15s; }
+  .minimap-edit-btn:hover { color:var(--accent); }
+  #minimapCanvas { display:block; }
+
+  /* CONTROLS */
+  .controls-bar { position:absolute; bottom:24px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:8px; pointer-events:all; }
+  .ctrl-btn { width:38px; height:38px; background:rgba(13,15,18,0.85); border:1px solid var(--border); border-radius:4px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.15s; color:var(--muted); backdrop-filter:blur(8px); }
+  .ctrl-btn:hover { border-color:var(--accent); color:var(--accent); background:rgba(240,165,0,0.1); }
+  .ctrl-btn svg { width:17px; height:17px; fill:currentColor; }
+  .ctrl-sep { width:1px; height:26px; background:var(--border); }
+  .ctrl-fov { font-family:var(--mono); font-size:10px; color:var(--muted); padding:0 6px; white-space:nowrap; }
+
+  /* WELCOME */
+  .welcome { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; background:radial-gradient(ellipse at center,#0d1520 0%,#050709 70%); z-index:10; transition:opacity 0.5s; }
+  .welcome.hidden { opacity:0; pointer-events:none; }
+  .welcome-icon { width:76px; height:76px; border:2px solid var(--accent); border-radius:50%; display:flex; align-items:center; justify-content:center; margin-bottom:20px; position:relative; }
+  .welcome-icon::before { content:''; position:absolute; inset:-8px; border:1px solid rgba(240,165,0,0.2); border-radius:50%; animation:spin 10s linear infinite; }
+  .welcome-icon::after { content:''; position:absolute; inset:-16px; border:1px solid rgba(240,165,0,0.07); border-radius:50%; animation:spin 15s linear infinite reverse; }
+  @keyframes spin { to{transform:rotate(360deg)} }
+  .welcome-icon svg { width:32px; height:32px; fill:var(--accent); }
+  .welcome h1 { font-family:var(--cond); font-size:32px; font-weight:700; letter-spacing:8px; text-transform:uppercase; color:#fff; margin-bottom:6px; }
+  .welcome p { font-family:var(--mono); font-size:11px; color:var(--muted); letter-spacing:2px; margin-bottom:32px; text-align:center; }
+  .welcome-actions { display:flex; gap:14px; flex-wrap:wrap; justify-content:center; }
+  .btn-primary { display:flex; align-items:center; gap:8px; padding:11px 22px; background:var(--accent); border:none; border-radius:3px; font-family:var(--cond); font-size:13px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:#000; cursor:pointer; transition:all 0.2s; }
+  .btn-primary:hover { background:#ffc233; transform:translateY(-1px); box-shadow:0 8px 24px rgba(240,165,0,0.3); }
+  .btn-primary svg { width:15px; height:15px; fill:currentColor; }
+  .btn-secondary { display:flex; align-items:center; gap:8px; padding:11px 22px; background:transparent; border:1px solid var(--border); border-radius:3px; font-family:var(--cond); font-size:13px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:var(--text); cursor:pointer; transition:all 0.2s; }
+  .btn-secondary:hover { border-color:var(--accent2); color:var(--accent2); background:rgba(0,200,255,0.05); }
+  .btn-secondary svg { width:15px; height:15px; fill:currentColor; }
+  .welcome-note { margin-top:28px; font-family:var(--mono); font-size:10px; color:var(--muted); text-align:center; max-width:380px; line-height:1.9; }
+  .flash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:20; transition:opacity 0.1s; }
+  .flash.active { opacity:0.15; }
+  .drag-hint { position:absolute; bottom:80px; left:50%; transform:translateX(-50%); font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:2px; animation:fadeout 3s ease forwards; animation-delay:2s; pointer-events:none; }
+  @keyframes fadeout { to{opacity:0} }
+
+  /* FADE CANVAS (crossfade between nodes) */
+  #fadeCanvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; opacity:0; transition:opacity 0.35s ease; display:block; }
+
+  /* SAVED INDICATOR */
+  #savedIndicator { font-family:var(--mono); font-size:9px; color:var(--success); letter-spacing:2px; opacity:0; transition:opacity 0.2s; pointer-events:none; }
+  #savedIndicator.visible { opacity:1; }
+
+  /* HOTSPOT EDIT MODE */
+  #panoramaCanvas.hotspot-edit-mode { cursor:crosshair; }
+  .btn-icon-text.hotspot-edit-active { border-color:var(--accent2) !important; color:var(--accent2) !important; background:rgba(0,200,255,0.1) !important; }
+
+  /* CUSTOM HOTSPOTS */
+  .hotspot-custom { position:absolute; pointer-events:all; cursor:pointer; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; gap:4px; }
+  .hotspot-pin { width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid; transition:all 0.2s; }
+  .hotspot-pin.info-type { background:rgba(0,200,255,0.15); border-color:var(--accent2); }
+  .hotspot-pin.link-type { background:rgba(0,230,118,0.15); border-color:var(--success); }
+  .hotspot-custom:hover .hotspot-pin { box-shadow:0 0 16px rgba(0,200,255,0.4); }
+  .hotspot-pin svg { width:16px; height:16px; fill:currentColor; color:var(--accent2); }
+  .hotspot-pin.link-type svg { color:var(--success); }
+  .hotspot-custom-label { font-family:var(--cond); font-size:9px; font-weight:700; letter-spacing:1px; color:#fff; text-transform:uppercase; background:rgba(13,15,18,0.8); padding:2px 6px; border-radius:2px; border:1px solid var(--border); white-space:nowrap; }
+
+  /* HOTSPOT INFO POPUP */
+  #hotspotInfoPopup { display:none; position:absolute; left:50%; top:40%; transform:translate(-50%,-50%); background:rgba(13,15,18,0.96); border:1px solid var(--border); border-left:3px solid var(--accent2); padding:14px 18px; max-width:300px; min-width:200px; z-index:50; pointer-events:all; }
+  #hotspotInfoTitle { font-family:var(--cond); font-size:14px; font-weight:700; letter-spacing:1px; color:#fff; margin-bottom:8px; }
+  #hotspotInfoText { font-family:var(--sans); font-size:12px; color:var(--text); line-height:1.6; }
+  #hotspotInfoClose { margin-top:12px; display:block; width:100%; padding:6px; background:transparent; border:1px solid var(--border); border-radius:3px; color:var(--muted); font-family:var(--cond); font-size:10px; cursor:pointer; text-transform:uppercase; letter-spacing:1px; transition:all 0.15s; }
+  #hotspotInfoClose:hover { border-color:var(--accent2); color:var(--accent2); }
+
+  /* MODAL BASE */
+  .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:200; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(4px); opacity:0; pointer-events:none; transition:opacity 0.2s; }
+  .modal-bg.open { opacity:1; pointer-events:all; }
+  .modal { background:var(--panel); border:1px solid var(--border); border-top:3px solid var(--accent); border-radius:4px; padding:24px 28px; transform:translateY(8px); transition:transform 0.2s; }
+  .modal-bg.open .modal { transform:translateY(0); }
+  .modal-title { font-family:var(--cond); font-size:16px; font-weight:700; letter-spacing:2px; text-transform:uppercase; color:#fff; margin-bottom:5px; }
+  .modal-sub { font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:1px; margin-bottom:18px; }
+  .modal-field { margin-bottom:14px; }
+  .modal-field label { display:block; font-family:var(--mono); font-size:9px; letter-spacing:2px; color:var(--muted); text-transform:uppercase; margin-bottom:6px; }
+  .modal-field input { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:3px; color:var(--text); font-family:var(--sans); font-size:13px; padding:8px 10px; outline:none; transition:border-color 0.15s; }
+  .modal-field input:focus { border-color:var(--accent); }
+  .modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }
+  .modal-btn-cancel { padding:8px 18px; background:transparent; border:1px solid var(--border); border-radius:3px; color:var(--muted); font-family:var(--cond); font-size:12px; font-weight:700; letter-spacing:1px; text-transform:uppercase; cursor:pointer; transition:all 0.15s; }
+  .modal-btn-cancel:hover { color:var(--text); }
+  .modal-btn-ok { padding:8px 18px; background:var(--accent); border:none; border-radius:3px; color:#000; font-family:var(--cond); font-size:12px; font-weight:700; letter-spacing:1px; text-transform:uppercase; cursor:pointer; transition:all 0.15s; }
+  .modal-btn-ok:hover { background:#ffc233; }
+  .modal-btn-ok:disabled { opacity:0.4; cursor:not-allowed; }
+
+  /* ══ ROUTE MAP EDITOR ══ */
+  .map-editor-bg { position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:300; display:flex; flex-direction:column; opacity:0; pointer-events:none; transition:opacity 0.25s; backdrop-filter:blur(6px); }
+  .map-editor-bg.open { opacity:1; pointer-events:all; }
+
+  .map-editor-header { display:flex; align-items:center; justify-content:space-between; padding:0 24px; height:52px; background:var(--panel); border-bottom:1px solid var(--border); flex-shrink:0; }
+  .map-editor-title { font-family:var(--cond); font-size:15px; font-weight:700; letter-spacing:3px; text-transform:uppercase; color:var(--accent); }
+  .map-editor-sub { font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:1px; margin-left:12px; }
+  .map-editor-header-left { display:flex; align-items:center; }
+  .map-editor-header-right { display:flex; align-items:center; gap:10px; }
+
+  .map-editor-body { display:flex; flex:1; overflow:hidden; }
+
+  /* Map canvas area */
+  .map-canvas-wrap { flex:1; position:relative; overflow:hidden; background:#080a0d; cursor:crosshair; }
+  .map-canvas-wrap.mode-select { cursor:default; }
+  .map-canvas-wrap.mode-drag { cursor:move; }
+  #mapEditorCanvas { display:block; width:100%; height:100%; }
+
+  /* Map editor sidebar */
+  .map-editor-sidebar { width:220px; background:var(--panel); border-left:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; overflow:hidden; }
+  .map-editor-section { padding:12px 14px 10px; border-bottom:1px solid var(--border); }
+  .map-editor-section-title { font-family:var(--mono); font-size:9px; letter-spacing:2px; color:var(--muted); text-transform:uppercase; margin-bottom:10px; }
+
+  .tool-row { display:flex; gap:6px; margin-bottom:8px; }
+  .tool-btn { flex:1; display:flex; align-items:center; justify-content:center; gap:5px; padding:7px 4px; background:transparent; border:1px solid var(--border); border-radius:3px; color:var(--muted); font-family:var(--cond); font-size:10px; font-weight:700; letter-spacing:1px; text-transform:uppercase; cursor:pointer; transition:all 0.15s; }
+  .tool-btn:hover { border-color:var(--accent2); color:var(--accent2); }
+  .tool-btn.active { border-color:var(--accent); color:var(--accent); background:rgba(240,165,0,0.08); }
+  .tool-btn svg { width:13px; height:13px; fill:currentColor; }
+
+  .map-hint { font-family:var(--mono); font-size:9px; color:var(--muted); letter-spacing:1px; line-height:1.7; margin-top:4px; }
+  .map-hint b { color:var(--accent2); font-weight:normal; }
+
+  /* Node list in editor */
+  .editor-node-list { flex:1; overflow-y:auto; padding:6px 0; }
+  .editor-node-list::-webkit-scrollbar { width:3px; }
+  .editor-node-list::-webkit-scrollbar-thumb { background:var(--border); border-radius:2px; }
+  .editor-node-item { display:flex; align-items:center; gap:8px; padding:7px 14px; cursor:pointer; transition:all 0.15s; border-left:2px solid transparent; }
+  .editor-node-item:hover { background:rgba(240,165,0,0.04); }
+  .editor-node-item.selected { background:rgba(240,165,0,0.07); border-left-color:var(--accent); }
+  .editor-node-item.placed { opacity:1; }
+  .editor-node-item.unplaced { opacity:0.5; }
+  .editor-node-dot { width:10px; height:10px; border-radius:50%; background:var(--muted); border:1.5px solid var(--border); flex-shrink:0; }
+  .editor-node-item.placed .editor-node-dot { background:rgba(240,165,0,0.5); border-color:var(--accent); }
+  .editor-node-item.selected .editor-node-dot { background:var(--accent); }
+  .editor-node-label { font-family:var(--cond); font-size:12px; font-weight:700; letter-spacing:0.5px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; flex:1; }
+  .editor-node-id { font-family:var(--mono); font-size:9px; color:var(--muted); flex-shrink:0; }
+
+  .map-editor-footer { border-top:1px solid var(--border); padding:10px 14px; }
+  .map-editor-status { font-family:var(--mono); font-size:9px; color:var(--muted); letter-spacing:1px; margin-bottom:8px; }
+  .map-editor-status span { color:var(--accent2); }
+
+  .floorplan-btn { width:100%; display:flex; align-items:center; justify-content:center; gap:7px; padding:8px; background:transparent; border:1px dashed var(--border); border-radius:3px; color:var(--muted); font-family:var(--cond); font-size:10px; letter-spacing:1px; cursor:pointer; transition:all 0.2s; text-transform:uppercase; }
+  .floorplan-btn:hover { border-color:var(--accent2); color:var(--accent2); }
+
+  .btn-done { width:100%; padding:9px; background:var(--accent); border:none; border-radius:3px; color:#000; font-family:var(--cond); font-size:13px; font-weight:700; letter-spacing:2px; text-transform:uppercase; cursor:pointer; transition:all 0.15s; margin-top:6px; }
+  .btn-done:hover { background:#ffc233; }
+
+  /* Selected node info in editor */
+  .selected-node-info { padding:10px 14px; border-bottom:1px solid var(--border); min-height:70px; }
+  .selected-node-info-empty { font-family:var(--mono); font-size:9px; color:var(--muted); letter-spacing:1px; line-height:1.7; }
+  .selected-node-name { font-family:var(--cond); font-size:14px; font-weight:700; letter-spacing:1px; color:#fff; margin-bottom:3px; }
+  .selected-node-coords { font-family:var(--mono); font-size:9px; color:var(--accent2); letter-spacing:1px; }
+  .selected-node-hint { font-family:var(--mono); font-size:9px; color:var(--muted); letter-spacing:1px; margin-top:4px; }
+</style>
+</head>
+<body>
+
+<!-- HEADER -->
+<header>
+  <div class="header-left">
+    <button class="sidebar-toggle" id="sidebarToggle" title="Toggle Sidebar (S)">
+      <svg viewBox="0 0 20 20"><rect x="2" y="4" width="16" height="2" rx="1"/><rect x="2" y="9" width="16" height="2" rx="1"/><rect x="2" y="14" width="16" height="2" rx="1"/></svg>
+    </button>
+    <div class="logo">
+      <div class="logo-icon"><svg viewBox="0 0 16 16"><path d="M8 1L1 5v6l7 4 7-4V5L8 1zm0 2l5 2.9V11L8 13.9 3 11V5.9L8 3z"/><circle cx="8" cy="8" r="2"/></svg></div>
+      FacilityView
+    </div>
+  </div>
+  <div class="route-selector-wrap">
+    <span class="route-label">Route:</span>
+    <select class="route-select" id="routeSelect"><option value="">— No routes yet —</option></select>
+    <button class="btn-icon-text" id="btnNewRoute">
+      <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>New Route
+    </button>
+  </div>
+  <div class="header-right">
+    <button class="btn-icon-text" id="btnHotspotEdit" onclick="toggleHotspotEditMode()" title="Click panorama to place a hotspot">
+      <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+      Add Hotspot
+    </button>
+    <span id="savedIndicator">SAVED</span>
+    <div class="status-dot"></div>
+    <span class="status-label">SYSTEM ONLINE</span>
+  </div>
+</header>
+
+<div class="main">
+  <!-- SIDEBAR -->
+  <div class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <span class="sidebar-title">Nodes</span>
+      <span class="sidebar-route-badge" id="sidebarRouteBadge">NO ROUTE</span>
+    </div>
+    <div class="location-list" id="locationList">
+      <div style="padding:20px 14px;font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.8;letter-spacing:1px;">
+        Create or select a route, then add panorama nodes.
+      </div>
+    </div>
+    <div class="sidebar-bottom">
+      <input type="file" id="fileInput" accept="image/*">
+      <input type="file" id="floorplanInput" accept="image/*">
+      <button class="upload-btn" onclick="triggerAddNode()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM8 13h3v3h2v-3h3l-4-4-4 4z"/></svg>
+        Add Node
+      </button>
+      <div class="node-count"><span id="nodeCountVal">0</span> nodes in route</div>
+    </div>
+  </div>
+
+  <!-- VIEWER -->
+  <div class="viewer-wrap" id="viewerWrap">
+    <canvas id="panoramaCanvas"></canvas>
+    <canvas id="fadeCanvas"></canvas>
+    <div class="scanlines"></div>
+
+    <div class="welcome" id="welcome">
+      <div class="welcome-icon">
+        <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 14.5v-9l6 4.5-6 4.5z"/></svg>
+      </div>
+      <h1>FacilityView</h1>
+      <p>VIRTUAL TOUR SIMULATOR &nbsp;·&nbsp; TRAINING SYSTEM</p>
+      <div class="welcome-actions">
+        <button class="btn-primary" onclick="loadDemo()">
+          <svg viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></svg>Load Demo Tour
+        </button>
+        <button class="btn-secondary" onclick="openNewRouteModal()">
+          <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>Create Route
+        </button>
+      </div>
+      <div class="welcome-note">Create a route, then add panoramic image nodes.<br>Use the Route Map Editor to position nodes on a floor plan.</div>
+    </div>
+
+    <div class="overlay" id="overlay">
+      <div class="route-progress"><div class="route-progress-fill" id="routeProgressFill" style="width:0%"></div></div>
+      <div class="corner tl"></div><div class="corner tr"></div>
+      <div class="corner bl"></div><div class="corner br"></div>
+      <div class="loc-display">
+        <div class="loc-display-node" id="dispNode">NODE 00</div>
+        <div class="loc-display-name" id="dispName"></div>
+        <div class="loc-display-sub" id="dispSub"></div>
+      </div>
+      <div class="compass">
+        <div class="compass-ring"></div><div class="compass-inner"></div>
+        <div class="compass-needle" id="compassNeedle"></div>
+        <div class="compass-n">N</div>
+      </div>
+      <div class="info-panel">
+        <div class="info-panel-title">Viewing Position</div>
+        <div class="info-panel-val" id="infoHeading">000° / +0°</div>
+        <div class="info-panel-row">
+          <div class="info-stat"><div class="info-stat-label">FOV</div><div class="info-stat-val" id="infoFov">75°</div></div>
+          <div class="info-stat"><div class="info-stat-label">Node</div><div class="info-stat-val" id="infoNodeId">—</div></div>
+        </div>
+      </div>
+
+      <!-- MINIMAP with edit button -->
+      <div class="minimap">
+        <div class="minimap-header">
+          <span class="minimap-title">Route Map</span>
+          <button class="minimap-edit-btn" onclick="openMapEditor()">EDIT MAP</button>
+        </div>
+        <canvas id="minimapCanvas" width="160" height="130"></canvas>
+      </div>
+
+      <div class="route-nav" id="routeNav">
+        <button class="route-nav-btn" id="btnPrev" onclick="navigatePrev()">
+          <svg viewBox="0 0 24 24"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>Prev
+        </button>
+        <span class="route-nav-pos"><span id="navCurrent">1</span> / <span id="navTotal">1</span></span>
+        <button class="route-nav-btn" id="btnNext" onclick="navigateNext()">
+          Next<svg viewBox="0 0 24 24"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+        </button>
+      </div>
+
+      <div class="controls-bar">
+        <button class="ctrl-btn" title="Zoom Out" onclick="adjustFov(10)">
+          <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14zM7 9h5v1H7z"/></svg>
+        </button>
+        <button class="ctrl-btn" title="Zoom In" onclick="adjustFov(-10)">
+          <svg viewBox="0 0 24 24"><path d="M15.5 14h-.79l-.28-.27A6.471 6.471 0 0 0 16 9.5 6.5 6.5 0 1 0 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14zM10 7H9v2H7v1h2v2h1v-2h2V9h-2z"/></svg>
+        </button>
+        <div class="ctrl-sep"></div>
+        <button class="ctrl-btn" title="Reset View" onclick="resetView()">
+          <svg viewBox="0 0 24 24"><path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/></svg>
+        </button>
+        <button class="ctrl-btn" title="Fullscreen" onclick="toggleFullscreen()">
+          <svg viewBox="0 0 24 24"><path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/></svg>
+        </button>
+        <div class="ctrl-sep"></div>
+        <div class="ctrl-fov" id="fovLabel">FOV: 75°</div>
+      </div>
+      <div class="drag-hint">◀  DRAG TO LOOK AROUND  ▶</div>
+    </div>
+
+    <div id="hotspots" style="position:absolute;inset:0;pointer-events:none;"></div>
+    <div id="hotspotInfoPopup">
+      <div id="hotspotInfoTitle"></div>
+      <div id="hotspotInfoText"></div>
+      <button id="hotspotInfoClose" onclick="document.getElementById('hotspotInfoPopup').style.display='none'">Close</button>
+    </div>
+    <div class="flash" id="flash"></div>
+  </div>
+</div>
+
+<!-- ══════════════ ROUTE MAP EDITOR ══════════════ -->
+<div class="map-editor-bg" id="mapEditorBg">
+  <div class="map-editor-header">
+    <div class="map-editor-header-left">
+      <span class="map-editor-title">Route Map Editor</span>
+      <span class="map-editor-sub" id="mapEditorRouteName">—</span>
+    </div>
+    <div class="map-editor-header-right">
+      <button class="btn-icon-text" onclick="document.getElementById('floorplanInput').click()">
+        <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+        Load Floor Plan
+      </button>
+      <button class="btn-icon-text" id="btnClearFloorplan" onclick="clearFloorplan()" style="display:none">
+        <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+        Remove Floor Plan
+      </button>
+      <button class="btn-icon-text accent" onclick="closeMapEditor()">
+        <svg viewBox="0 0 24 24"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+        Close
+      </button>
+    </div>
+  </div>
+
+  <div class="map-editor-body">
+    <!-- Canvas -->
+    <div class="map-canvas-wrap" id="mapCanvasWrap">
+      <canvas id="mapEditorCanvas"></canvas>
+    </div>
+
+    <!-- Right sidebar -->
+    <div class="map-editor-sidebar">
+      <div class="map-editor-section">
+        <div class="map-editor-section-title">Tool</div>
+        <div class="tool-row">
+          <button class="tool-btn active" id="toolPlace" onclick="setTool('place')">
+            <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
+            Place
+          </button>
+          <button class="tool-btn" id="toolMove" onclick="setTool('move')">
+            <svg viewBox="0 0 24 24"><path d="M10 9h4V6h3l-5-5-5 5h3v3zm-1 1H6V7l-5 5 5 5v-3h3v-4zm14 2l-5-5v3h-3v4h3v3l5-5zm-9 3h-4v3H7l5 5 5-5h-3v-3z"/></svg>
+            Move
+          </button>
+        </div>
+        <div class="map-hint" id="toolHint">
+          <b>Click</b> on the map to place the selected node. <b>Select</b> a node from the list below first.
+        </div>
+      </div>
+
+      <div class="selected-node-info" id="selectedNodeInfo">
+        <div class="selected-node-info-empty">Select a node from the list below to place or move it on the map.</div>
+      </div>
+
+      <div class="map-editor-section" style="padding-bottom:6px;">
+        <div class="map-editor-section-title">Nodes <span style="color:var(--accent2)" id="editorPlacedCount">0/0</span></div>
+      </div>
+      <div class="editor-node-list" id="editorNodeList"></div>
+
+      <div class="map-editor-footer">
+        <div class="map-editor-status">Placed: <span id="editorStatusPlaced">0</span> / <span id="editorStatusTotal">0</span> nodes</div>
+        <button class="floorplan-btn" onclick="document.getElementById('floorplanInput').click()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+          Load Floor Plan Image
+        </button>
+        <button class="btn-done" onclick="closeMapEditor()">Done — Save Layout</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- MODALS -->
+<div class="modal-bg" id="modalNewRoute">
+  <div class="modal" style="min-width:320px;max-width:400px;width:90%">
+    <div class="modal-title">New Route</div>
+    <div class="modal-sub">Define a new navigation route for your facility tour.</div>
+    <div class="modal-field"><label>Route Name</label><input type="text" id="newRouteName" placeholder="e.g. Warehouse Entry to Dock" maxlength="48"></div>
+    <div class="modal-field"><label>Description (optional)</label><input type="text" id="newRouteDesc" placeholder="e.g. Main floor walkthrough" maxlength="80"></div>
+    <div class="modal-actions">
+      <button class="modal-btn-cancel" onclick="closeModal('modalNewRoute')">Cancel</button>
+      <button class="modal-btn-ok" onclick="confirmNewRoute()">Create Route</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalAddNode">
+  <div class="modal" style="min-width:320px;max-width:400px;width:90%">
+    <div class="modal-title">Add Node</div>
+    <div class="modal-sub" id="addNodeModalSub">Adding node to route.</div>
+    <div class="modal-field"><label>Node Name</label><input type="text" id="newNodeName" placeholder="e.g. Entrance Lobby" maxlength="40"></div>
+    <div class="modal-field"><label>Description (optional)</label><input type="text" id="newNodeDesc" placeholder="e.g. Main entry point" maxlength="60"></div>
+    <div class="modal-field">
+      <label>Panorama Image</label>
+      <button class="upload-btn" style="border-style:solid;justify-content:flex-start;padding:8px 12px;" onclick="document.getElementById('fileInput').click()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM8 13h3v3h2v-3h3l-4-4-4 4z"/></svg>
+        <span id="nodeFileLabel">Choose image file...</span>
+      </button>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn-cancel" onclick="cancelAddNode()">Cancel</button>
+      <button class="modal-btn-ok" id="confirmNodeBtn" onclick="confirmAddNode()" disabled>Add Node</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalRenameNode">
+  <div class="modal" style="min-width:300px;max-width:380px;width:90%">
+    <div class="modal-title">Rename Node</div>
+    <div class="modal-sub" id="renameNodeSub">Update node name and description.</div>
+    <div class="modal-field"><label>Node Name</label><input type="text" id="renameNodeName" maxlength="40"></div>
+    <div class="modal-field"><label>Description</label><input type="text" id="renameNodeDesc" maxlength="60"></div>
+    <div class="modal-actions">
+      <button class="modal-btn-cancel" onclick="closeModal('modalRenameNode')">Cancel</button>
+      <button class="modal-btn-ok" onclick="confirmRenameNode()">Save</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalAddHotspot">
+  <div class="modal" style="min-width:320px;max-width:420px;width:90%">
+    <div class="modal-title">Add Hotspot</div>
+    <div class="modal-sub" id="addHotspotSub">Place an info marker or navigation link.</div>
+    <div class="modal-field">
+      <label>Type</label>
+      <select id="hotspotType" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:var(--text);font-family:var(--sans);font-size:13px;padding:8px 10px;outline:none;transition:border-color 0.15s;">
+        <option value="info">Info Marker</option>
+        <option value="link">Node Link</option>
+      </select>
+    </div>
+    <div class="modal-field"><label>Label</label><input type="text" id="hotspotLabel" placeholder="e.g. Safety Exit" maxlength="40"></div>
+    <div class="modal-field" id="hotspotContentField"><label>Info Text</label><input type="text" id="hotspotContent" placeholder="Enter information to display..." maxlength="200"></div>
+    <div class="modal-field" id="hotspotLinkField" style="display:none">
+      <label>Target Node</label>
+      <select id="hotspotLinkTarget" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:var(--text);font-family:var(--sans);font-size:13px;padding:8px 10px;outline:none;"></select>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn-cancel" onclick="closeModal('modalAddHotspot')">Cancel</button>
+      <button class="modal-btn-ok" onclick="confirmAddHotspot()">Add Hotspot</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════
+// STATE
+// ══════════════════════════════════════════════════
+const routes = [];
+let currentRouteIdx = -1;
+let currentNodeIdx  = -1;
+let yaw = 0, pitch = 0, fov = 75;
+let isDragging = false, lastX = 0, lastY = 0;
+let mouseDownX = 0, mouseDownY = 0;
+let img = null, renderPending = false;
+let pendingNodeImage = null;
+let renameTargetIdx  = -1;
+
+// Map editor state
+let mapTool = 'place';            // 'place' | 'move'
+let mapSelectedNodeIdx = -1;      // which node is selected in editor
+let mapDraggingNodeIdx = -1;      // which node is being dragged
+let mapDragOffX = 0, mapDragOffY = 0;
+let floorplanImg = null;          // optional background image
+let mapEditorOpen = false;
+
+// Crossfade state
+let isFading = false, fadeTimeout = null;
+
+// Custom hotspot state
+let hotspotEditMode = false;
+let pendingHotspotYaw = 0, pendingHotspotPitch = 0;
+
+// IndexedDB
+let db = null;
+
+const canvas       = document.getElementById('panoramaCanvas');
+const ctx          = canvas.getContext('2d');
+const fadeCanvas   = document.getElementById('fadeCanvas');
+const fadeCtx      = fadeCanvas.getContext('2d');
+const minimapCanvas= document.getElementById('minimapCanvas');
+const mctx         = minimapCanvas.getContext('2d');
+const mapEdCanvas  = document.getElementById('mapEditorCanvas');
+const meCtx        = mapEdCanvas.getContext('2d');
+
+// ── helpers ──
+function currentRoute() { return routes[currentRouteIdx] || null; }
+function currentNodes() { const r = currentRoute(); return r ? r.nodes : []; }
+
+// ══════════════════════════════════════════════════
+// SIDEBAR TOGGLE
+// ══════════════════════════════════════════════════
+let sidebarOpen = true;
+document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);
+function toggleSidebar() {
+  sidebarOpen = !sidebarOpen;
+  document.getElementById('sidebar').classList.toggle('collapsed', !sidebarOpen);
+  setTimeout(resizeCanvas, 260);
+}
+window.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if ((e.key === 's' || e.key === 'S') && !mapEditorOpen) toggleSidebar();
+});
+
+// ══════════════════════════════════════════════════
+// ROUTE MANAGEMENT
+// ══════════════════════════════════════════════════
+document.getElementById('btnNewRoute').addEventListener('click', openNewRouteModal);
+function openNewRouteModal() {
+  document.getElementById('newRouteName').value = '';
+  document.getElementById('newRouteDesc').value  = '';
+  openModal('modalNewRoute');
+  setTimeout(() => document.getElementById('newRouteName').focus(), 100);
+}
+function confirmNewRoute() {
+  const name = document.getElementById('newRouteName').value.trim();
+  if (!name) { document.getElementById('newRouteName').focus(); return; }
+  const route = { id:'R'+Date.now(), name, desc:document.getElementById('newRouteDesc').value.trim(), nodes:[], floorplan:null };
+  routes.push(route);
+  closeModal('modalNewRoute');
+  rebuildRouteSelect();
+  selectRoute(routes.length - 1);
+  document.getElementById('welcome').classList.add('hidden');
+  saveRoutes();
+}
+function rebuildRouteSelect() {
+  const sel = document.getElementById('routeSelect');
+  sel.innerHTML = '';
+  if (!routes.length) { sel.innerHTML = '<option value="">— No routes yet —</option>'; return; }
+  routes.forEach((r, i) => {
+    const o = document.createElement('option');
+    o.value = i;
+    o.textContent = r.name + (r.nodes.length ? ` (${r.nodes.length})` : '');
+    sel.appendChild(o);
+  });
+  sel.value = currentRouteIdx >= 0 ? currentRouteIdx : 0;
+}
+document.getElementById('routeSelect').addEventListener('change', function() {
+  const idx = parseInt(this.value);
+  if (!isNaN(idx)) selectRoute(idx);
+});
+function selectRoute(idx) {
+  currentRouteIdx = idx; currentNodeIdx = -1; img = null;
+  const route = currentRoute();
+  document.getElementById('sidebarRouteBadge').textContent = route ? route.name : 'NO ROUTE';
+  document.getElementById('routeSelect').value = idx;
+  floorplanImg = route?.floorplan || null;
+  buildSidebar(); drawMinimap(); updateNodeCount();
+  document.getElementById('overlay').style.opacity = '0';
+  document.getElementById('hotspots').style.opacity = '0';
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  if (route && route.nodes.length > 0) navigateTo(0);
+}
+
+// ══════════════════════════════════════════════════
+// NODE MANAGEMENT
+// ══════════════════════════════════════════════════
+function triggerAddNode() {
+  if (!currentRoute()) { openNewRouteModal(); return; }
+  const nextNum = currentNodes().length + 1;
+  document.getElementById('newNodeName').value = '';
+  document.getElementById('newNodeDesc').value  = '';
+  document.getElementById('nodeFileLabel').textContent = 'Choose image file...';
+  document.getElementById('addNodeModalSub').textContent = `Adding Node ${String(nextNum).padStart(2,'0')} to "${currentRoute().name}"`;
+  document.getElementById('confirmNodeBtn').disabled = true;
+  pendingNodeImage = null;
+  openModal('modalAddNode');
+  setTimeout(() => document.getElementById('newNodeName').focus(), 100);
+}
+document.getElementById('fileInput').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  const modal = document.getElementById('modalAddNode');
+  if (modal.classList.contains('open')) {
+    const reader = new FileReader();
+    reader.onload = ev => {
+      const image = new Image();
+      image.onload = () => {
+        pendingNodeImage = image;
+        document.getElementById('nodeFileLabel').textContent = file.name;
+        document.getElementById('confirmNodeBtn').disabled = false;
+      };
+      image.src = ev.target.result;
+    };
+    reader.readAsDataURL(file);
+  }
+  e.target.value = '';
+});
+function cancelAddNode() { pendingNodeImage = null; closeModal('modalAddNode'); }
+function confirmAddNode() {
+  if (!pendingNodeImage) return;
+  const name = document.getElementById('newNodeName').value.trim() || ('Node ' + (currentNodes().length + 1));
+  const nodes = currentNodes();
+  // Default map position: unplaced (null) — user places in editor
+  const node = {
+    id: 'N' + String(nodes.length + 1).padStart(2,'0'),
+    name,
+    desc: document.getElementById('newNodeDesc').value.trim(),
+    image: pendingNodeImage,
+    mapX: null, mapY: null,  // null = unplaced
+    hotspots: []
+  };
+  nodes.push(node);
+  pendingNodeImage = null;
+  closeModal('modalAddNode');
+  rebuildRouteSelect(); buildSidebar(); drawMinimap(); updateNodeCount();
+  navigateTo(nodes.length - 1);
+  saveRoutes();
+}
+function openRenameModal(nodeIdx) {
+  const node = currentNodes()[nodeIdx]; if (!node) return;
+  renameTargetIdx = nodeIdx;
+  document.getElementById('renameNodeName').value = node.name;
+  document.getElementById('renameNodeDesc').value  = node.desc || '';
+  document.getElementById('renameNodeSub').textContent = `Editing Node ${String(nodeIdx+1).padStart(2,'0')}`;
+  openModal('modalRenameNode');
+  setTimeout(() => document.getElementById('renameNodeName').focus(), 100);
+}
+function confirmRenameNode() {
+  if (renameTargetIdx < 0) return;
+  const node = currentNodes()[renameTargetIdx]; if (!node) return;
+  node.name = document.getElementById('renameNodeName').value.trim() || node.name;
+  node.desc = document.getElementById('renameNodeDesc').value.trim();
+  closeModal('modalRenameNode');
+  buildSidebar(); drawMinimap();
+  if (renameTargetIdx === currentNodeIdx) updateHeaders(node, renameTargetIdx);
+  if (mapEditorOpen) { buildEditorNodeList(); drawMapEditor(); }
+  renameTargetIdx = -1;
+  saveRoutes();
+}
+function deleteNode(nodeIdx) {
+  const nodes = currentNodes();
+  if (!confirm(`Delete Node ${String(nodeIdx+1).padStart(2,'0')}: "${nodes[nodeIdx].name}"?`)) return;
+  nodes.splice(nodeIdx, 1);
+  nodes.forEach((n, i) => n.id = 'N' + String(i+1).padStart(2,'0'));
+  buildSidebar(); rebuildRouteSelect(); drawMinimap(); updateNodeCount();
+  if (mapEditorOpen) { buildEditorNodeList(); drawMapEditor(); }
+  if (!nodes.length) {
+    currentNodeIdx = -1; img = null;
+    document.getElementById('overlay').style.opacity = '0';
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+  } else {
+    navigateTo(Math.min(nodeIdx, nodes.length - 1));
+  }
+  saveRoutes();
+}
+function updateNodeCount() {
+  document.getElementById('nodeCountVal').textContent = currentNodes().length;
+}
+
+// ══════════════════════════════════════════════════
+// SIDEBAR
+// ══════════════════════════════════════════════════
+function buildSidebar() {
+  const list  = document.getElementById('locationList');
+  const nodes = currentNodes();
+  list.innerHTML = '';
+  if (!nodes.length) {
+    list.innerHTML = '<div style="padding:16px 14px;font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.8;letter-spacing:1px;">No nodes yet. Click "Add Node" to add your first panorama.</div>';
+    return;
+  }
+  nodes.forEach((node, i) => {
+    const el = document.createElement('div');
+    el.className = 'loc-item' + (i === currentNodeIdx ? ' active' : '');
+    el.innerHTML = `
+      <div class="loc-node-num">N${String(i+1).padStart(2,'0')}</div>
+      <div class="loc-info">
+        <div class="loc-name">${node.name}</div>
+        ${node.desc ? `<div class="loc-desc">${node.desc}</div>` : ''}
+      </div>
+      <div class="loc-actions">
+        <button class="loc-action-btn" title="Rename" onclick="event.stopPropagation();openRenameModal(${i})">
+          <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+        </button>
+        <button class="loc-action-btn danger" title="Delete" onclick="event.stopPropagation();deleteNode(${i})">
+          <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+        </button>
+      </div>`;
+    el.addEventListener('click', () => navigateTo(i));
+    list.appendChild(el);
+  });
+}
+
+// ══════════════════════════════════════════════════
+// NAVIGATION
+// ══════════════════════════════════════════════════
+function navigateTo(index) {
+  const nodes = currentNodes();
+  if (index < 0 || index >= nodes.length) return;
+  const hotspotsEl = document.getElementById('hotspots');
+
+  // Capture current frame to fadeCanvas for crossfade transition
+  if (img) {
+    fadeCanvas.width = canvas.width;
+    fadeCanvas.height = canvas.height;
+    fadeCtx.drawImage(canvas, 0, 0);
+    fadeCanvas.style.transition = 'none';
+    fadeCanvas.style.opacity = '1';
+    hotspotsEl.style.opacity = '0';
+    if (fadeTimeout) { clearTimeout(fadeTimeout); fadeTimeout = null; }
+    isFading = true;
+  }
+
+  currentNodeIdx = index;
+  img = nodes[index].image;
+  document.getElementById('overlay').style.opacity = '1';
+  const flash = document.getElementById('flash');
+  flash.classList.add('active');
+  setTimeout(() => flash.classList.remove('active'), 150);
+  resetView();
+  buildSidebar(); updateHeaders(nodes[index], index);
+  buildHotspots(index); drawMinimap(); updateRouteProgress(index);
+  renderFrame(); // new frame renders on main canvas under the fade overlay
+
+  if (isFading) {
+    fadeCanvas.getBoundingClientRect(); // force reflow so CSS transition fires
+    fadeCanvas.style.transition = 'opacity 0.35s ease';
+    fadeCanvas.style.opacity = '0';
+    fadeTimeout = setTimeout(() => {
+      isFading = false; fadeTimeout = null;
+      hotspotsEl.style.opacity = '1';
+    }, 360);
+  } else {
+    hotspotsEl.style.opacity = '1';
+  }
+}
+function navigatePrev() { if (currentNodeIdx > 0) navigateTo(currentNodeIdx - 1); }
+function navigateNext() { const n = currentNodes(); if (currentNodeIdx < n.length - 1) navigateTo(currentNodeIdx + 1); }
+
+function updateHeaders(node, index) {
+  const nodes = currentNodes();
+  document.getElementById('dispNode').textContent = 'NODE ' + String(index+1).padStart(2,'0');
+  document.getElementById('dispName').textContent  = node.name;
+  document.getElementById('dispSub').textContent   = (currentRoute()?.name || '') + (node.desc ? ' · ' + node.desc : '');
+  document.getElementById('infoNodeId').textContent = node.id;
+  document.getElementById('navCurrent').textContent = index + 1;
+  document.getElementById('navTotal').textContent   = nodes.length;
+  document.getElementById('btnPrev').disabled = index === 0;
+  document.getElementById('btnNext').disabled = index === nodes.length - 1;
+}
+function updateRouteProgress(index) {
+  const n   = currentNodes().length;
+  const pct = n <= 1 ? 100 : (index / (n-1)) * 100;
+  document.getElementById('routeProgressFill').style.width = pct + '%';
+}
+
+// ══════════════════════════════════════════════════
+// PANORAMA RENDERER
+// ══════════════════════════════════════════════════
+function resizeCanvas() {
+  const wrap = document.getElementById('viewerWrap');
+  canvas.width = wrap.clientWidth; canvas.height = wrap.clientHeight;
+  fadeCanvas.width = wrap.clientWidth; fadeCanvas.height = wrap.clientHeight;
+  if (img) renderFrame();
+}
+function renderFrame() {
+  if (!img) return;
+  const W = canvas.width, H = canvas.height;
+  ctx.clearRect(0, 0, W, H);
+  const fovRad = fov * Math.PI / 180;
+  const imgW = img.width, imgH = img.height;
+  const imageData = ctx.createImageData(W, H);
+  const data = imageData.data;
+  if (!img._pixelCache) {
+    const tmp = document.createElement('canvas');
+    tmp.width = imgW; tmp.height = imgH;
+    const tc = tmp.getContext('2d');
+    tc.drawImage(img, 0, 0);
+    img._pixelCache = tc.getImageData(0, 0, imgW, imgH).data;
+  }
+  const src = img._pixelCache;
+  const halfFovH = fovRad / 2, halfFovV = halfFovH / (W / H);
+  for (let px = 0; px < W; px++) {
+    for (let py = 0; py < H; py++) {
+      const rx = ((px/W)-0.5)*2*halfFovH, ry = ((py/H)-0.5)*2*halfFovV;
+      const lon = yaw + rx;
+      const lat = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch - ry));
+      const u = ((lon % (2*Math.PI)) + 2*Math.PI) % (2*Math.PI) / (2*Math.PI);
+      const v = (lat + Math.PI/2) / Math.PI;
+      const sx = Math.floor(u * imgW) % imgW;
+      const sy = Math.max(0, Math.min(imgH-1, Math.floor((1-v)*imgH)));
+      const si = (sy * imgW + Math.max(0, Math.min(imgW-1, sx))) * 4;
+      const di = (py * W + px) * 4;
+      data[di]=src[si]; data[di+1]=src[si+1]; data[di+2]=src[si+2]; data[di+3]=255;
+    }
+  }
+  ctx.putImageData(imageData, 0, 0);
+  updateHUD(); updateHotspotPositions();
+  drawMinimap(); // live update for direction arrow
+}
+function scheduleRender() {
+  if (!renderPending) {
+    renderPending = true;
+    requestAnimationFrame(() => { renderFrame(); renderPending = false; });
+  }
+}
+
+// ══════════════════════════════════════════════════
+// HUD
+// ══════════════════════════════════════════════════
+function updateHUD() {
+  const heading  = ((yaw * 180 / Math.PI) % 360 + 360) % 360;
+  const pitchDeg = pitch * 180 / Math.PI;
+  document.getElementById('infoHeading').textContent =
+    String(Math.round(heading)).padStart(3,'0') + '° / ' + (pitchDeg >= 0 ? '+' : '') + Math.round(pitchDeg) + '°';
+  document.getElementById('infoFov').textContent = fov + '°';
+  document.getElementById('fovLabel').textContent = 'FOV: ' + fov + '°';
+  document.getElementById('compassNeedle').style.transform = `translateX(-50%) translateY(-100%) rotate(${heading}deg)`;
+}
+
+// ══════════════════════════════════════════════════
+// HOTSPOTS
+// ══════════════════════════════════════════════════
+function buildHotspots(index) {
+  const container = document.getElementById('hotspots');
+  container.innerHTML = '';
+  const nodes = currentNodes();
+  const current = nodes[index];
+  const targets = [];
+  if (index > 0) {
+    const prev = nodes[index-1];
+    // Compute bearing from current node toward prev using map coordinates.
+    // Formula matches minimap yaw convention: 0=up (north), canvas Y increases downward.
+    let angle = Math.PI; // fallback: face backward
+    if (current && current.mapX !== null && prev.mapX !== null)
+      angle = Math.atan2(prev.mapX - current.mapX, current.mapY - prev.mapY);
+    targets.push({ idx: index-1, angle, label: '← ' + prev.name });
+  }
+  if (index < nodes.length-1) {
+    const next = nodes[index+1];
+    let angle = 0; // fallback: face forward
+    if (current && current.mapX !== null && next.mapX !== null)
+      angle = Math.atan2(next.mapX - current.mapX, current.mapY - next.mapY);
+    targets.push({ idx: index+1, angle, label: next.name + ' →' });
+  }
+  targets.forEach(t => {
+    const el = document.createElement('div');
+    el.className = 'hotspot';
+    el.dataset.angle = t.angle;
+    el.innerHTML = `
+      <div class="hotspot-arrow">
+        <svg viewBox="0 0 24 24"><path d="M12 2l-5.5 9h11z"/></svg>
+      </div>
+      <div class="hotspot-label">${t.label}</div>`;
+    el.style.pointerEvents = 'all';
+    el.addEventListener('click', () => navigateTo(t.idx));
+    container.appendChild(el);
+  });
+  // Custom hotspots — rendered after nav hotspots
+  // Note: link targets stored by node ID; IDs shift if nodes are deleted (known limitation)
+  if (current) {
+    (current.hotspots || []).forEach(hs => {
+      const el = document.createElement('div');
+      el.className = 'hotspot-custom';
+      el.dataset.angle = hs.yaw;
+      el.dataset.pitch = hs.pitch;
+      const iconSvg = hs.type === 'info'
+        ? `<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>`
+        : `<svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`;
+      el.innerHTML = `<div class="hotspot-pin ${hs.type}-type">${iconSvg}</div><div class="hotspot-custom-label">${hs.label}</div>`;
+      el.style.pointerEvents = 'all';
+      if (hs.type === 'info') {
+        el.addEventListener('click', () => showHotspotInfo(hs));
+      } else {
+        el.addEventListener('click', () => {
+          const target = nodes.find(n => n.id === hs.content);
+          if (target) navigateTo(nodes.indexOf(target));
+        });
+      }
+      el.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        if (confirm(`Delete hotspot "${hs.label}"?`)) deleteHotspot(index, hs.id);
+      });
+      container.appendChild(el);
+    });
+  }
+  updateHotspotPositions();
+}
+function updateHotspotPositions() {
+  const W = canvas.width, H = canvas.height;
+  const fovRad = fov * Math.PI / 180;
+  document.querySelectorAll('.hotspot, .hotspot-custom').forEach(el => {
+    const worldYaw = parseFloat(el.dataset.angle) || 0;
+    const relYaw   = worldYaw - yaw;
+    const normYaw  = ((relYaw + Math.PI) % (2*Math.PI) + 2*Math.PI) % (2*Math.PI) - Math.PI;
+    // Nav hotspots sit slightly below horizon; custom hotspots use their stored pitch
+    const relPitch = el.classList.contains('hotspot-custom')
+      ? (parseFloat(el.dataset.pitch) || 0) - pitch
+      : -0.12 - pitch;
+    const halfFov  = fovRad / 2, halfFovV = halfFov / (W/H);
+    const px = W/2 + (normYaw / halfFov) * W/2;
+    const py = H/2 - (relPitch / halfFovV) * H/2;
+    const visible = Math.abs(normYaw) < halfFov * 0.88 && Math.abs(relPitch) < halfFovV;
+    el.style.display  = visible ? 'flex' : 'none';
+    el.style.left = px + 'px'; el.style.top = py + 'px';
+  });
+}
+
+// ══════════════════════════════════════════════════
+// MINIMAP — with live direction arrow
+// ══════════════════════════════════════════════════
+function drawMinimap() {
+  const W = 160, H = 130;
+  mctx.clearRect(0, 0, W, H);
+
+  // Background
+  mctx.fillStyle = '#080a0d';
+  mctx.fillRect(0, 0, W, H);
+
+  const nodes = currentNodes();
+  if (!nodes.length) return;
+
+  // Compute bounds to auto-fit placed nodes
+  const placed = nodes.filter(n => n.mapX !== null);
+  let scaleX = 1, scaleY = 1, offX = 0, offY = 0;
+  if (placed.length >= 1) {
+    const xs = placed.map(n => n.mapX), ys = placed.map(n => n.mapY);
+    const minX = Math.min(...xs), maxX = Math.max(...xs);
+    const minY = Math.min(...ys), maxY = Math.max(...ys);
+    const rangeX = maxX - minX || 1, rangeY = maxY - minY || 1;
+    const pad = 22;
+    scaleX = (W - pad*2) / rangeX;
+    scaleY = (H - pad*2) / rangeY;
+    const scale = Math.min(scaleX, scaleY, 3.5); // cap zoom
+    scaleX = scale; scaleY = scale;
+    offX = pad - minX * scale + ((W - pad*2) - rangeX*scale) / 2;
+    offY = pad - minY * scale + ((H - pad*2) - rangeY*scale) / 2;
+  }
+
+  function toMM(nx, ny) { return [nx * scaleX + offX, ny * scaleY + offY]; }
+
+  // Draw path line
+  for (let i = 0; i < nodes.length - 1; i++) {
+    const a = nodes[i], b = nodes[i+1];
+    if (a.mapX === null || b.mapX === null) continue;
+    const [ax, ay] = toMM(a.mapX, a.mapY);
+    const [bx, by] = toMM(b.mapX, b.mapY);
+    mctx.strokeStyle = i < currentNodeIdx ? 'rgba(240,165,0,0.5)' : '#1e2530';
+    mctx.lineWidth = 1.5;
+    mctx.beginPath(); mctx.moveTo(ax, ay); mctx.lineTo(bx, by); mctx.stroke();
+  }
+
+  // Draw nodes
+  nodes.forEach((node, i) => {
+    if (node.mapX === null) return;
+    const [x, y] = toMM(node.mapX, node.mapY);
+    const isActive = i === currentNodeIdx;
+    const isPast   = i < currentNodeIdx;
+
+    // Pulse ring for active
+    if (isActive) {
+      mctx.beginPath(); mctx.arc(x, y, 11, 0, Math.PI*2);
+      mctx.strokeStyle = 'rgba(240,165,0,0.2)'; mctx.lineWidth = 1; mctx.stroke();
+    }
+
+    // Node dot
+    mctx.beginPath(); mctx.arc(x, y, isActive ? 6 : 4, 0, Math.PI*2);
+    mctx.fillStyle   = isActive ? '#f0a500' : isPast ? 'rgba(240,165,0,0.4)' : '#2a3344';
+    mctx.fill();
+    mctx.strokeStyle = isActive ? '#f0a500' : isPast ? 'rgba(240,165,0,0.6)' : '#3a4a60';
+    mctx.lineWidth = 1.5; mctx.stroke();
+
+    // ── LIVE VIEWING DIRECTION ARROW ──
+    if (isActive) {
+      const arrowLen = 14;
+      const arrowAng = yaw; // yaw directly maps to world direction
+      const ax2 = x + Math.sin(arrowAng) * arrowLen;
+      const ay2 = y - Math.cos(arrowAng) * arrowLen;
+
+      // FOV cone
+      const halfFovRad = (fov / 2) * Math.PI / 180;
+      mctx.beginPath();
+      mctx.moveTo(x, y);
+      mctx.arc(x, y, arrowLen + 4, arrowAng - Math.PI/2 - halfFovRad, arrowAng - Math.PI/2 + halfFovRad);
+      mctx.closePath();
+      mctx.fillStyle = 'rgba(240,165,0,0.12)';
+      mctx.fill();
+      mctx.strokeStyle = 'rgba(240,165,0,0.3)';
+      mctx.lineWidth = 0.5; mctx.stroke();
+
+      // Arrow shaft
+      mctx.beginPath();
+      mctx.moveTo(x, y); mctx.lineTo(ax2, ay2);
+      mctx.strokeStyle = '#f0a500'; mctx.lineWidth = 2;
+      mctx.lineCap = 'round'; mctx.stroke(); mctx.lineCap = 'butt';
+
+      // Arrowhead
+      const headLen = 5;
+      const headAng = Math.atan2(ay2 - y, ax2 - x);
+      mctx.beginPath();
+      mctx.moveTo(ax2, ay2);
+      mctx.lineTo(ax2 - headLen * Math.cos(headAng - 0.5), ay2 - headLen * Math.sin(headAng - 0.5));
+      mctx.lineTo(ax2 - headLen * Math.cos(headAng + 0.5), ay2 - headLen * Math.sin(headAng + 0.5));
+      mctx.closePath();
+      mctx.fillStyle = '#f0a500'; mctx.fill();
+    }
+
+    // Node label
+    mctx.font = '7px monospace';
+    mctx.fillStyle  = isActive ? '#f0a500' : '#4a5568';
+    mctx.textAlign  = 'center';
+    mctx.fillText(node.id, x, y + 16);
+  });
+}
+
+// ══════════════════════════════════════════════════
+// ROUTE MAP EDITOR
+// ══════════════════════════════════════════════════
+function openMapEditor() {
+  if (!currentRoute()) return;
+  mapEditorOpen = true;
+  mapSelectedNodeIdx = -1;
+  mapDraggingNodeIdx = -1;
+  document.getElementById('mapEditorRouteName').textContent = '— ' + currentRoute().name;
+  document.getElementById('mapEditorBg').classList.add('open');
+  resizeMapEditor();
+  buildEditorNodeList();
+  drawMapEditor();
+}
+function closeMapEditor() {
+  document.getElementById('mapEditorBg').classList.remove('open');
+  mapEditorOpen = false;
+  drawMinimap(); // refresh minimap with new positions
+}
+
+function resizeMapEditor() {
+  const wrap = document.getElementById('mapCanvasWrap');
+  mapEdCanvas.width  = wrap.clientWidth;
+  mapEdCanvas.height = wrap.clientHeight;
+  drawMapEditor();
+}
+window.addEventListener('resize', () => { resizeCanvas(); if (mapEditorOpen) resizeMapEditor(); });
+
+function setTool(tool) {
+  mapTool = tool;
+  document.getElementById('toolPlace').classList.toggle('active', tool === 'place');
+  document.getElementById('toolMove').classList.toggle('active', tool === 'move');
+  const wrap = document.getElementById('mapCanvasWrap');
+  wrap.className = 'map-canvas-wrap mode-' + (tool === 'place' ? 'default' : 'select');
+  document.getElementById('toolHint').innerHTML = tool === 'place'
+    ? '<b>Click</b> on the map to place the selected node. <b>Select</b> a node from the list first.'
+    : '<b>Click & drag</b> any placed node to reposition it.';
+}
+
+function buildEditorNodeList() {
+  const list  = document.getElementById('editorNodeList');
+  const nodes = currentNodes();
+  list.innerHTML = '';
+  const placed = nodes.filter(n => n.mapX !== null).length;
+  document.getElementById('editorPlacedCount').textContent = placed + '/' + nodes.length;
+  document.getElementById('editorStatusPlaced').textContent = placed;
+  document.getElementById('editorStatusTotal').textContent  = nodes.length;
+
+  nodes.forEach((node, i) => {
+    const el = document.createElement('div');
+    const isPlaced = node.mapX !== null;
+    el.className = 'editor-node-item ' + (isPlaced ? 'placed' : 'unplaced') + (i === mapSelectedNodeIdx ? ' selected' : '');
+    el.innerHTML = `
+      <div class="editor-node-dot"></div>
+      <div class="editor-node-label">${node.name}</div>
+      <div class="editor-node-id">${node.id}</div>`;
+    el.addEventListener('click', () => {
+      mapSelectedNodeIdx = i;
+      if (mapTool === 'move' && node.mapX !== null) setTool('move');
+      buildEditorNodeList();
+      updateSelectedNodeInfo();
+      drawMapEditor();
+    });
+    list.appendChild(el);
+  });
+}
+
+function updateSelectedNodeInfo() {
+  const el   = document.getElementById('selectedNodeInfo');
+  const node = currentNodes()[mapSelectedNodeIdx];
+  if (!node) {
+    el.innerHTML = '<div class="selected-node-info-empty">Select a node from the list below to place or move it on the map.</div>';
+    return;
+  }
+  const isPlaced = node.mapX !== null;
+  el.innerHTML = `
+    <div class="selected-node-name">${node.id}: ${node.name}</div>
+    <div class="selected-node-coords">${isPlaced ? `X:${Math.round(node.mapX)}  Y:${Math.round(node.mapY)}` : 'Not yet placed'}</div>
+    <div class="selected-node-hint">${mapTool === 'place' ? (isPlaced ? 'Click map to move to new position.' : 'Click anywhere on the map to place.') : 'Drag the node dot on the map to reposition.'}</div>`;
+}
+
+// ── Map editor canvas drawing ──
+function drawMapEditor() {
+  const W = mapEdCanvas.width, H = mapEdCanvas.height;
+  meCtx.clearRect(0, 0, W, H);
+
+  // Background
+  meCtx.fillStyle = '#080a0d';
+  meCtx.fillRect(0, 0, W, H);
+
+  // Grid
+  meCtx.strokeStyle = 'rgba(255,255,255,0.03)';
+  meCtx.lineWidth = 1;
+  const gs = 40;
+  for (let x = 0; x < W; x += gs) { meCtx.beginPath(); meCtx.moveTo(x,0); meCtx.lineTo(x,H); meCtx.stroke(); }
+  for (let y = 0; y < H; y += gs) { meCtx.beginPath(); meCtx.moveTo(0,y); meCtx.lineTo(W,y); meCtx.stroke(); }
+
+  // Floor plan image
+  const route = currentRoute();
+  if (route && route.floorplan) {
+    meCtx.globalAlpha = 0.35;
+    meCtx.drawImage(route.floorplan, 0, 0, W, H);
+    meCtx.globalAlpha = 1;
+  }
+
+  const nodes = currentNodes();
+  if (!nodes.length) {
+    meCtx.font = '13px monospace';
+    meCtx.fillStyle = 'rgba(74,85,104,0.8)';
+    meCtx.textAlign = 'center';
+    meCtx.fillText('No nodes in this route yet. Add nodes via the sidebar.', W/2, H/2);
+    return;
+  }
+
+  // Draw path lines between placed nodes
+  for (let i = 0; i < nodes.length - 1; i++) {
+    const a = nodes[i], b = nodes[i+1];
+    if (a.mapX === null || b.mapX === null) continue;
+    meCtx.strokeStyle = 'rgba(240,165,0,0.3)';
+    meCtx.lineWidth = 1.5;
+    meCtx.setLineDash([5, 5]);
+    meCtx.beginPath(); meCtx.moveTo(a.mapX, a.mapY); meCtx.lineTo(b.mapX, b.mapY); meCtx.stroke();
+    meCtx.setLineDash([]);
+
+    // Midpoint arrow showing direction
+    const mx = (a.mapX + b.mapX) / 2, my = (a.mapY + b.mapY) / 2;
+    const ang = Math.atan2(b.mapY - a.mapY, b.mapX - a.mapX);
+    meCtx.save();
+    meCtx.translate(mx, my); meCtx.rotate(ang);
+    meCtx.fillStyle = 'rgba(240,165,0,0.4)';
+    meCtx.beginPath(); meCtx.moveTo(5,0); meCtx.lineTo(-4,-4); meCtx.lineTo(-4,4); meCtx.closePath(); meCtx.fill();
+    meCtx.restore();
+  }
+
+  // Draw nodes
+  nodes.forEach((node, i) => {
+    if (node.mapX === null) return;
+    const x = node.mapX, y = node.mapY;
+    const isSelected = i === mapSelectedNodeIdx;
+    const isActive   = i === currentNodeIdx;
+
+    // Outer ring
+    meCtx.beginPath(); meCtx.arc(x, y, isSelected ? 16 : 12, 0, Math.PI*2);
+    meCtx.strokeStyle = isSelected ? 'rgba(240,165,0,0.5)' : 'rgba(255,255,255,0.05)';
+    meCtx.lineWidth = 1; meCtx.stroke();
+
+    // Node circle
+    meCtx.beginPath(); meCtx.arc(x, y, isSelected ? 10 : 8, 0, Math.PI*2);
+    meCtx.fillStyle = isSelected ? '#f0a500' : isActive ? 'rgba(240,165,0,0.6)' : '#2a3a52';
+    meCtx.fill();
+    meCtx.strokeStyle = isSelected ? '#fff' : isActive ? '#f0a500' : '#3a5070';
+    meCtx.lineWidth = 1.5; meCtx.stroke();
+
+    // ID label
+    meCtx.font = `bold ${isSelected ? 10 : 9}px monospace`;
+    meCtx.fillStyle = isSelected ? '#000' : '#c8d4e0';
+    meCtx.textAlign = 'center';
+    meCtx.textBaseline = 'middle';
+    meCtx.fillText(node.id, x, y);
+    meCtx.textBaseline = 'alphabetic';
+
+    // Name label below
+    meCtx.font = '10px monospace';
+    meCtx.fillStyle = isSelected ? '#f0a500' : 'rgba(200,212,224,0.7)';
+    meCtx.fillText(node.name, x, y + 22);
+  });
+
+  // Unplaced nodes shown in corner
+  const unplaced = nodes.filter(n => n.mapX === null);
+  if (unplaced.length) {
+    meCtx.font = '9px monospace';
+    meCtx.fillStyle = 'rgba(74,85,104,0.9)';
+    meCtx.textAlign = 'left';
+    meCtx.fillText(`${unplaced.length} unplaced node${unplaced.length>1?'s':''}`, 12, H - 12);
+  }
+
+  // If a node is selected but unplaced, show a hint
+  const selNode = nodes[mapSelectedNodeIdx];
+  if (selNode && selNode.mapX === null) {
+    meCtx.font = '11px monospace';
+    meCtx.fillStyle = 'rgba(240,165,0,0.7)';
+    meCtx.textAlign = 'center';
+    meCtx.fillText(`Click to place: ${selNode.id} — ${selNode.name}`, W/2, 28);
+  }
+}
+
+// ── Map editor mouse events ──
+mapEdCanvas.addEventListener('mousedown', e => {
+  if (!mapEditorOpen) return;
+  const rect = mapEdCanvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  const nodes = currentNodes();
+
+  if (mapTool === 'move') {
+    // Find nearest placed node within hit radius
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      if (n.mapX === null) continue;
+      const dist = Math.hypot(mx - n.mapX, my - n.mapY);
+      if (dist <= 14) {
+        mapDraggingNodeIdx = i;
+        mapDragOffX = mx - n.mapX;
+        mapDragOffY = my - n.mapY;
+        mapSelectedNodeIdx = i;
+        buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor();
+        return;
+      }
+    }
+    // Click on empty space — just deselect
+    mapSelectedNodeIdx = -1;
+    buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor();
+
+  } else {
+    // Place tool — click to place selected node
+    if (mapSelectedNodeIdx >= 0 && mapSelectedNodeIdx < nodes.length) {
+      nodes[mapSelectedNodeIdx].mapX = Math.round(mx);
+      nodes[mapSelectedNodeIdx].mapY = Math.round(my);
+      buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor();
+      saveRoutes();
+      // Auto-advance to next unplaced
+      const nextUnplaced = nodes.findIndex((n, i) => i > mapSelectedNodeIdx && n.mapX === null);
+      if (nextUnplaced >= 0) {
+        mapSelectedNodeIdx = nextUnplaced;
+        buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor();
+      }
+    } else {
+      // Click node to select it
+      for (let i = 0; i < nodes.length; i++) {
+        const n = nodes[i];
+        if (n.mapX === null) continue;
+        if (Math.hypot(mx - n.mapX, my - n.mapY) <= 14) {
+          mapSelectedNodeIdx = i;
+          buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor();
+          return;
+        }
+      }
+    }
+  }
+});
+
+mapEdCanvas.addEventListener('mousemove', e => {
+  if (!mapEditorOpen || mapDraggingNodeIdx < 0) return;
+  const rect  = mapEdCanvas.getBoundingClientRect();
+  const mx = e.clientX - rect.left, my = e.clientY - rect.top;
+  const node  = currentNodes()[mapDraggingNodeIdx];
+  if (!node) return;
+  node.mapX = Math.round(mx - mapDragOffX);
+  node.mapY = Math.round(my - mapDragOffY);
+  updateSelectedNodeInfo(); drawMapEditor();
+});
+
+mapEdCanvas.addEventListener('mouseup', () => {
+  if (mapDraggingNodeIdx >= 0) {
+    mapDraggingNodeIdx = -1;
+    buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor();
+    saveRoutes();
+  }
+});
+
+// Floor plan loader
+document.getElementById('floorplanInput').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  const route = currentRoute(); if (!route) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const image = new Image();
+    image.onload = () => {
+      route.floorplan = image;
+      floorplanImg = image;
+      document.getElementById('btnClearFloorplan').style.display = 'flex';
+      if (mapEditorOpen) drawMapEditor();
+      saveRoutes();
+    };
+    image.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+});
+function clearFloorplan() {
+  const route = currentRoute(); if (!route) return;
+  route.floorplan = null; floorplanImg = null;
+  document.getElementById('btnClearFloorplan').style.display = 'none';
+  if (mapEditorOpen) drawMapEditor();
+}
+
+// ══════════════════════════════════════════════════
+// INPUT CONTROLS
+// ══════════════════════════════════════════════════
+canvas.addEventListener('mousedown', e => { isDragging=true; lastX=e.clientX; lastY=e.clientY; mouseDownX=e.clientX; mouseDownY=e.clientY; canvas.classList.add('dragging'); });
+canvas.addEventListener('click', e => {
+  if (!hotspotEditMode || !img) return;
+  if (Math.hypot(e.clientX - mouseDownX, e.clientY - mouseDownY) > 5) return; // was a drag
+  const pos = canvasClickToYawPitch(e.clientX, e.clientY);
+  toggleHotspotEditMode();
+  openAddHotspotModal(pos.yaw, pos.pitch);
+});
+window.addEventListener('mouseup', () => { isDragging=false; canvas.classList.remove('dragging'); });
+window.addEventListener('mousemove', e => {
+  if (!isDragging || !img) return;
+  const dx=e.clientX-lastX, dy=e.clientY-lastY;
+  lastX=e.clientX; lastY=e.clientY;
+  const s=fov/5000;
+  yaw   -= dx*s*2;
+  pitch  = Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, pitch - dy*s*2));
+  scheduleRender();
+});
+canvas.addEventListener('touchstart', e => {
+  if (e.touches.length===1) { isDragging=true; lastX=e.touches[0].clientX; lastY=e.touches[0].clientY; }
+},{passive:true});
+window.addEventListener('touchend', () => isDragging=false);
+window.addEventListener('touchmove', e => {
+  if (!isDragging||!img||e.touches.length!==1) return;
+  const dx=e.touches[0].clientX-lastX, dy=e.touches[0].clientY-lastY;
+  lastX=e.touches[0].clientX; lastY=e.touches[0].clientY;
+  const s=fov/5000;
+  yaw  -=dx*s*2;
+  pitch = Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, pitch-dy*s*2));
+  scheduleRender();
+},{passive:true});
+canvas.addEventListener('wheel', e => { e.preventDefault(); adjustFov(e.deltaY>0?5:-5); },{passive:false});
+window.addEventListener('keydown', e => {
+  if (e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
+  if (!img||mapEditorOpen) return;
+  const step=0.05;
+  if (e.key==='ArrowLeft')  { yaw-=step; scheduleRender(); }
+  if (e.key==='ArrowRight') { yaw+=step; scheduleRender(); }
+  if (e.key==='ArrowUp')    { pitch=Math.min(Math.PI/2.2,pitch+step); scheduleRender(); }
+  if (e.key==='ArrowDown')  { pitch=Math.max(-Math.PI/2.2,pitch-step); scheduleRender(); }
+  if (e.key==='+'||e.key==='=') adjustFov(-5);
+  if (e.key==='-') adjustFov(5);
+});
+function adjustFov(d) { fov=Math.max(30,Math.min(120,fov+d)); scheduleRender(); }
+function resetView()   { yaw=0; pitch=0; fov=75; scheduleRender(); }
+function toggleFullscreen() {
+  if (!document.fullscreenElement) document.getElementById('viewerWrap').requestFullscreen?.();
+  else document.exitFullscreen?.();
+}
+
+// ══════════════════════════════════════════════════
+// MODAL HELPERS
+// ══════════════════════════════════════════════════
+function openModal(id)  { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+document.querySelectorAll('.modal-bg').forEach(bg => {
+  bg.addEventListener('click', e => { if (e.target===bg) bg.classList.remove('open'); });
+});
+document.getElementById('newRouteName').addEventListener('keydown', e => { if (e.key==='Enter') confirmNewRoute(); });
+document.getElementById('newRouteDesc').addEventListener('keydown', e => { if (e.key==='Enter') confirmNewRoute(); });
+document.getElementById('renameNodeName').addEventListener('keydown', e => { if (e.key==='Enter') confirmRenameNode(); });
+document.getElementById('hotspotLabel').addEventListener('keydown', e => { if (e.key==='Enter') confirmAddHotspot(); });
+document.getElementById('hotspotType').addEventListener('change', updateHotspotTypeFields);
+
+// ══════════════════════════════════════════════════
+// DEMO DATA
+// ══════════════════════════════════════════════════
+function makeSyntheticPanorama(colors, label) {
+  const w=2048,h=1024,c=document.createElement('canvas');
+  c.width=w; c.height=h;
+  const cx=c.getContext('2d');
+  const grad=cx.createLinearGradient(0,0,0,h);
+  grad.addColorStop(0,colors[0]);grad.addColorStop(0.45,colors[1]);
+  grad.addColorStop(0.55,colors[2]);grad.addColorStop(1,colors[3]);
+  cx.fillStyle=grad; cx.fillRect(0,0,w,h);
+  cx.strokeStyle='rgba(255,255,255,0.06)'; cx.lineWidth=1;
+  for(let i=0;i<20;i++){const y=h*0.55+i*(h*0.45/20);cx.beginPath();cx.moveTo(0,y);cx.lineTo(w,y);cx.stroke();}
+  for(let i=0;i<8;i++){
+    const x=(w/8)*i+w/16;
+    const cg=cx.createLinearGradient(x-8,0,x+8,0);
+    cg.addColorStop(0,'rgba(0,0,0,0)');cg.addColorStop(0.3,'rgba(255,255,255,0.08)');
+    cg.addColorStop(0.7,'rgba(255,255,255,0.04)');cg.addColorStop(1,'rgba(0,0,0,0)');
+    cx.fillStyle=cg; cx.fillRect(x-8,h*0.1,16,h*0.45);
+  }
+  cx.strokeStyle='rgba(255,255,255,0.15)'; cx.lineWidth=1;
+  cx.beginPath(); cx.moveTo(0,h*0.5); cx.lineTo(w,h*0.5); cx.stroke();
+  cx.font='bold 44px monospace'; cx.fillStyle='rgba(255,255,255,0.12)';
+  cx.textAlign='center'; cx.fillText(label.toUpperCase(),w/2,h/2+14);
+  for(let i=0;i<12;i++){
+    const lx=(w/12)*i+w/24;
+    const lg=cx.createRadialGradient(lx,h*0.12,0,lx,h*0.12,55);
+    lg.addColorStop(0,'rgba(255,240,180,0.22)');lg.addColorStop(1,'rgba(255,240,180,0)');
+    cx.fillStyle=lg; cx.fillRect(lx-55,h*0.05,110,110);
+  }
+  return c.toDataURL('image/jpeg',0.8);
+}
+
+const demoNodes = [
+  {name:'Main Entrance', desc:'Building Entry / Reception', colors:['#1a2a3a','#0d1f30','#1c1008','#0a0806'], mapX:210, mapY:80},
+  {name:'Corridor A',    desc:'Main Hallway',               colors:['#141e14','#1a2a1a','#120e08','#0a0806'], mapX:210, mapY:160},
+  {name:'Workshop Floor',desc:'Primary Manufacturing',      colors:['#0f1a0f','#162416','#18100a','#0c0905'], mapX:110, mapY:260},
+  {name:'Storage Bay',   desc:'Inventory & Receiving',      colors:['#1a1a0a','#28280d','#14100a','#0a0806'], mapX:330, mapY:260},
+  {name:'Control Room',  desc:'Operations & Monitoring',    colors:['#050d1a','#0a1828','#080510','#04030a'], mapX:110, mapY:370},
+  {name:'Loading Dock',  desc:'Exterior / Shipping',        colors:['#1a1520','#28203a','#100d18','#08060e'], mapX:330, mapY:370},
+];
+
+function loadDemo() {
+  document.getElementById('welcome').classList.add('hidden');
+  const route={id:'DEMO',name:'Demo Facility Tour',desc:'Sample walkthrough',nodes:[],floorplan:null};
+  routes.push(route);
+  rebuildRouteSelect();
+  currentRouteIdx=0;
+  document.getElementById('sidebarRouteBadge').textContent=route.name;
+  document.getElementById('routeSelect').value=0;
+  let loaded=0;
+  demoNodes.forEach((nd,i)=>{
+    const dataUrl=makeSyntheticPanorama(nd.colors,nd.name);
+    const image=new Image();
+    image.onload=()=>{
+      route.nodes.push({id:'N'+String(i+1).padStart(2,'0'),name:nd.name,desc:nd.desc,image,mapX:nd.mapX,mapY:nd.mapY,hotspots:[]});
+      loaded++;
+      if(loaded===demoNodes.length){buildSidebar();updateNodeCount();rebuildRouteSelect();navigateTo(0);saveRoutes();}
+    };
+    image.src=dataUrl;
+  });
+}
+
+// ══════════════════════════════════════════════════
+// INDEXEDDB — SAVE / LOAD
+// ══════════════════════════════════════════════════
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open('facilityview_db', 1);
+    req.onupgradeneeded = e => e.target.result.createObjectStore('tours', { keyPath: 'key' });
+    req.onsuccess = e => { db = e.target.result; resolve(); };
+    req.onerror = e => reject(e.target.error);
+  });
+}
+function saveRoutes() {
+  if (!db) return;
+  const data = routes.map(r => ({
+    id: r.id, name: r.name, desc: r.desc,
+    floorplan: r.floorplan ? r.floorplan.src : null,
+    nodes: r.nodes.map(n => ({
+      id: n.id, name: n.name, desc: n.desc,
+      imageSrc: n.image ? n.image.src : null,
+      mapX: n.mapX, mapY: n.mapY,
+      hotspots: n.hotspots || []
+    }))
+  }));
+  const tx = db.transaction('tours', 'readwrite');
+  tx.objectStore('tours').put({ key: 'main', routes: data });
+  tx.oncomplete = () => flashSavedIndicator();
+}
+async function loadRoutes() {
+  if (!db) return false;
+  return new Promise(resolve => {
+    const tx = db.transaction('tours', 'readonly');
+    const req = tx.objectStore('tours').get('main');
+    req.onsuccess = async e => {
+      const record = e.target.result;
+      if (!record || !record.routes || !record.routes.length) { resolve(false); return; }
+      const promises = [];
+      record.routes.forEach(rd => {
+        const route = { id: rd.id, name: rd.name, desc: rd.desc || '', nodes: [], floorplan: null };
+        if (rd.floorplan) {
+          const fp = new Image();
+          promises.push(new Promise(res => { fp.onload = fp.onerror = res; }));
+          fp.src = rd.floorplan;
+          route.floorplan = fp;
+        }
+        rd.nodes.forEach(nd => {
+          const image = new Image();
+          promises.push(new Promise(res => { image.onload = image.onerror = res; }));
+          image.src = nd.imageSrc;
+          route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, hotspots: nd.hotspots || [] });
+        });
+        routes.push(route);
+      });
+      await Promise.all(promises);
+      resolve(true);
+    };
+    req.onerror = () => resolve(false);
+  });
+}
+function flashSavedIndicator() {
+  const el = document.getElementById('savedIndicator');
+  el.classList.add('visible');
+  setTimeout(() => el.classList.remove('visible'), 1500);
+}
+
+// ══════════════════════════════════════════════════
+// CUSTOM HOTSPOT FUNCTIONS
+// ══════════════════════════════════════════════════
+function toggleHotspotEditMode() {
+  if (!img) return;
+  hotspotEditMode = !hotspotEditMode;
+  canvas.classList.toggle('hotspot-edit-mode', hotspotEditMode);
+  document.getElementById('btnHotspotEdit').classList.toggle('hotspot-edit-active', hotspotEditMode);
+}
+function canvasClickToYawPitch(clientX, clientY) {
+  const rect = canvas.getBoundingClientRect();
+  const px = clientX - rect.left, py = clientY - rect.top;
+  const W = rect.width, H = rect.height;
+  const halfFovH = (fov * Math.PI / 180) / 2;
+  const halfFovV = halfFovH / (W / H);
+  return {
+    yaw:   yaw   + (px / W - 0.5) * 2 * halfFovH,
+    pitch: Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch - (py / H - 0.5) * 2 * halfFovV))
+  };
+}
+function openAddHotspotModal(yawVal, pitchVal) {
+  pendingHotspotYaw = yawVal; pendingHotspotPitch = pitchVal;
+  document.getElementById('hotspotLabel').value = '';
+  document.getElementById('hotspotContent').value = '';
+  document.getElementById('hotspotType').value = 'info';
+  document.getElementById('addHotspotSub').textContent =
+    `Yaw: ${Math.round(yawVal * 180 / Math.PI)}°  Pitch: ${Math.round(pitchVal * 180 / Math.PI)}°`;
+  // Populate link target dropdown
+  const sel = document.getElementById('hotspotLinkTarget');
+  sel.innerHTML = '';
+  currentNodes().forEach((n, i) => {
+    if (i === currentNodeIdx) return;
+    const o = document.createElement('option');
+    o.value = n.id; o.textContent = n.id + ': ' + n.name;
+    sel.appendChild(o);
+  });
+  updateHotspotTypeFields();
+  openModal('modalAddHotspot');
+  setTimeout(() => document.getElementById('hotspotLabel').focus(), 100);
+}
+function updateHotspotTypeFields() {
+  const type = document.getElementById('hotspotType').value;
+  document.getElementById('hotspotContentField').style.display = type === 'info' ? '' : 'none';
+  document.getElementById('hotspotLinkField').style.display    = type === 'link' ? '' : 'none';
+}
+function confirmAddHotspot() {
+  const label = document.getElementById('hotspotLabel').value.trim();
+  if (!label) { document.getElementById('hotspotLabel').focus(); return; }
+  const type = document.getElementById('hotspotType').value;
+  const content = type === 'info'
+    ? document.getElementById('hotspotContent').value.trim()
+    : document.getElementById('hotspotLinkTarget').value;
+  const node = currentNodes()[currentNodeIdx];
+  if (!node) return;
+  node.hotspots = node.hotspots || [];
+  node.hotspots.push({ id: 'HS' + Date.now(), type, yaw: pendingHotspotYaw, pitch: pendingHotspotPitch, label, content });
+  closeModal('modalAddHotspot');
+  buildHotspots(currentNodeIdx);
+  saveRoutes();
+}
+function deleteHotspot(nodeIdx, hotspotId) {
+  const node = currentNodes()[nodeIdx]; if (!node) return;
+  node.hotspots = (node.hotspots || []).filter(h => h.id !== hotspotId);
+  buildHotspots(currentNodeIdx);
+  saveRoutes();
+}
+function showHotspotInfo(hs) {
+  document.getElementById('hotspotInfoTitle').textContent = hs.label;
+  document.getElementById('hotspotInfoText').textContent  = hs.content;
+  document.getElementById('hotspotInfoPopup').style.display = 'block';
+}
+
+// ══════════════════════════════════════════════════
+// INIT
+// ══════════════════════════════════════════════════
+async function init() {
+  document.getElementById('overlay').style.opacity = '0';
+  document.getElementById('hotspots').style.opacity = '0';
+  resizeCanvas();
+  await openDB();
+  const hasData = await loadRoutes();
+  if (hasData) {
+    rebuildRouteSelect();
+    document.getElementById('welcome').classList.add('hidden');
+    selectRoute(0);
+  }
+}
+init();
+</script>
+</body>
+</html>
