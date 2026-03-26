@@ -157,6 +157,12 @@
   .welcome-note { margin-top:28px; font-family:var(--mono); font-size:10px; color:var(--muted); text-align:center; max-width:380px; line-height:1.9; }
   .flash { position:absolute; inset:0; background:#fff; opacity:0; pointer-events:none; z-index:20; transition:opacity 0.1s; }
   .flash.active { opacity:0.15; }
+
+  /* LOADING OVERLAY */
+  #loadingOverlay { position:fixed; inset:0; background:radial-gradient(ellipse at center,#0d1520 0%,#050709 70%); z-index:600; display:flex; flex-direction:column; align-items:center; justify-content:center; transition:opacity 0.4s; }
+  #loadingOverlay.hidden { opacity:0; pointer-events:none; }
+  .loader-ring { width:56px; height:56px; border:2px solid rgba(240,165,0,0.15); border-top-color:var(--accent); border-radius:50%; animation:spin 0.85s linear infinite; margin-bottom:20px; }
+  #loadingMsg { font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:3px; text-transform:uppercase; }
   .drag-hint { position:absolute; bottom:80px; left:50%; transform:translateX(-50%); font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:2px; animation:fadeout 3s ease forwards; animation-delay:2s; pointer-events:none; }
   @keyframes fadeout { to{opacity:0} }
 
@@ -1735,6 +1741,7 @@ function exportRoutes() {
 }
 async function importRoutes(file) {
   if (!file) return;
+  showLoader('Importing routes...');
   try {
     const text = await file.text();
     const data = JSON.parse(text);
@@ -1765,8 +1772,10 @@ async function importRoutes(file) {
       selectRoute(routes.indexOf(imported[0]));
       document.getElementById('welcome').classList.add('hidden');
     }
+    hideLoader();
     alert(`Imported ${imported.length} route(s) with ${imported.reduce((s, r) => s + r.nodes.length, 0)} total nodes.`);
   } catch (e) {
+    hideLoader();
     alert('Import failed: ' + e.message);
   }
 }
@@ -1987,6 +1996,17 @@ function showHotspotInfo(hs) {
 }
 
 // ══════════════════════════════════════════════════
+// LOADING INDICATOR
+// ══════════════════════════════════════════════════
+function showLoader(msg) {
+  document.getElementById('loadingMsg').textContent = msg || 'Loading...';
+  document.getElementById('loadingOverlay').classList.remove('hidden');
+}
+function hideLoader() {
+  document.getElementById('loadingOverlay').classList.add('hidden');
+}
+
+// ══════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════
 async function init() {
@@ -1994,7 +2014,9 @@ async function init() {
   document.getElementById('hotspots').style.opacity = '0';
   resizeCanvas();
   await openDB();
+  showLoader('Loading tours...');
   const hasData = await loadRoutes();
+  hideLoader();
   if (hasData) {
     rebuildRouteSelect();
     document.getElementById('welcome').classList.add('hidden');
@@ -2003,5 +2025,10 @@ async function init() {
 }
 init();
 </script>
+
+<div id="loadingOverlay">
+  <div class="loader-ring"></div>
+  <div id="loadingMsg">Loading...</div>
+</div>
 </body>
 </html>
