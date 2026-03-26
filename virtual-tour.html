@@ -584,11 +584,22 @@
 </div>
 
 <div class="modal-bg" id="modalRenameNode">
-  <div class="modal" style="min-width:300px;max-width:380px;width:90%">
-    <div class="modal-title">Rename Node</div>
-    <div class="modal-sub" id="renameNodeSub">Update node name and description.</div>
+  <div class="modal" style="min-width:300px;max-width:400px;width:90%">
+    <div class="modal-title">Edit Node</div>
+    <div class="modal-sub" id="renameNodeSub">Update node name, description, and panorama.</div>
     <div class="modal-field"><label>Node Name</label><input type="text" id="renameNodeName" maxlength="40"></div>
     <div class="modal-field"><label>Description</label><input type="text" id="renameNodeDesc" maxlength="60"></div>
+    <div class="modal-field">
+      <label>Panorama Image</label>
+      <div style="display:flex;gap:6px;align-items:center;">
+        <button class="upload-btn" style="flex:1;border-style:solid;justify-content:flex-start;padding:8px 12px;" onclick="document.getElementById('nodeImageInput').click()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM8 13h3v3h2v-3h3l-4-4-4 4z"/></svg>
+          <span id="renameNodeImageLabel">No image</span>
+        </button>
+        <button class="modal-btn-cancel" id="btnRemoveNodeImage" onclick="removeNodeImage()" style="flex-shrink:0;">Remove</button>
+      </div>
+    </div>
+    <input type="file" id="nodeImageInput" accept="image/*" style="display:none">
     <div class="modal-actions">
       <button class="modal-btn-cancel" onclick="closeModal('modalRenameNode')">Cancel</button>
       <button class="modal-btn-ok" onclick="confirmRenameNode()">Save</button>
@@ -859,8 +870,40 @@ function openRenameModal(nodeIdx) {
   document.getElementById('renameNodeName').value = node.name;
   document.getElementById('renameNodeDesc').value  = node.desc || '';
   document.getElementById('renameNodeSub').textContent = `Editing Node ${String(nodeIdx+1).padStart(2,'0')}`;
+  document.getElementById('renameNodeImageLabel').textContent = node.image ? 'Image attached — click to replace' : 'No image — click to add';
+  document.getElementById('btnRemoveNodeImage').style.display = node.image ? '' : 'none';
   openModal('modalRenameNode');
   setTimeout(() => document.getElementById('renameNodeName').focus(), 100);
+}
+document.getElementById('nodeImageInput').addEventListener('change', e => {
+  const file = e.target.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const image = new Image();
+    image.onload = () => {
+      const node = currentNodes()[renameTargetIdx]; if (!node) return;
+      node.image = image;
+      node.thumbUrl = null; // reset cached thumbnail
+      document.getElementById('renameNodeImageLabel').textContent = 'Image attached — click to replace';
+      document.getElementById('btnRemoveNodeImage').style.display = '';
+      if (renameTargetIdx === currentNodeIdx) { img = image; renderFrame(); }
+      buildSidebar();
+      saveRoutes();
+    };
+    image.src = ev.target.result;
+  };
+  reader.readAsDataURL(file);
+  e.target.value = '';
+});
+function removeNodeImage() {
+  const node = currentNodes()[renameTargetIdx]; if (!node) return;
+  if (!confirm('Remove the panorama from this node?')) return;
+  node.image = null; node.thumbUrl = null;
+  document.getElementById('renameNodeImageLabel').textContent = 'No image — click to add';
+  document.getElementById('btnRemoveNodeImage').style.display = 'none';
+  if (renameTargetIdx === currentNodeIdx) { img = null; renderFrame(); }
+  buildSidebar();
+  saveRoutes();
 }
 function confirmRenameNode() {
   if (renameTargetIdx < 0) return;
