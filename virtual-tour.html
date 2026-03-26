@@ -128,11 +128,15 @@
   .info-stat-val { font-family:var(--mono); font-size:11px; color:var(--text); margin-top:1px; }
 
   /* MINIMAP */
-  .minimap { position:absolute; bottom:80px; right:20px; width:160px; background:rgba(13,15,18,0.88); border:1px solid var(--border); backdrop-filter:blur(8px); pointer-events:none; overflow:hidden; }
+  .minimap { position:absolute; bottom:80px; right:20px; width:240px; background:rgba(13,15,18,0.88); border:1px solid var(--border); backdrop-filter:blur(8px); pointer-events:none; overflow:hidden; }
   .minimap-header { display:flex; align-items:center; justify-content:space-between; padding:5px 8px 4px; border-bottom:1px solid var(--border); }
   .minimap-title { font-family:var(--mono); font-size:8px; letter-spacing:2px; color:var(--muted); text-transform:uppercase; }
   .minimap-edit-btn { font-family:var(--mono); font-size:8px; color:var(--accent2); letter-spacing:1px; background:none; border:none; cursor:pointer; padding:0; pointer-events:all; text-transform:uppercase; transition:color 0.15s; }
   .minimap-edit-btn:hover { color:var(--accent); }
+  .minimap-minimize-btn { font-family:var(--mono); font-size:9px; color:var(--muted); background:none; border:none; cursor:pointer; padding:0 0 0 6px; pointer-events:all; line-height:1; transition:color 0.15s; }
+  .minimap-minimize-btn:hover { color:var(--accent); }
+  .minimap.minimized #minimapCanvas { display:none; }
+  .minimap.minimized { border-bottom:none; }
   #minimapCanvas { display:block; }
 
   /* CONTROLS */
@@ -417,12 +421,15 @@
       </div>
 
       <!-- MINIMAP with edit button -->
-      <div class="minimap">
+      <div class="minimap" id="minimapWidget">
         <div class="minimap-header">
           <span class="minimap-title">Route Map</span>
-          <button class="minimap-edit-btn" onclick="openMapEditor()">EDIT MAP</button>
+          <div style="display:flex;align-items:center;gap:6px;">
+            <button class="minimap-edit-btn" onclick="openMapEditor()">EDIT MAP</button>
+            <button class="minimap-minimize-btn" id="minimapMinBtn" onclick="toggleMinimapMinimize()" title="Minimize map">▼</button>
+          </div>
         </div>
-        <canvas id="minimapCanvas" width="160" height="130"></canvas>
+        <canvas id="minimapCanvas" width="240" height="195"></canvas>
       </div>
 
       <div class="route-nav" id="routeNav">
@@ -1241,8 +1248,14 @@ function updateHotspotPositions() {
 // ══════════════════════════════════════════════════
 // MINIMAP — with live direction arrow
 // ══════════════════════════════════════════════════
+function toggleMinimapMinimize() {
+  const widget = document.getElementById('minimapWidget');
+  const btn = document.getElementById('minimapMinBtn');
+  widget.classList.toggle('minimized');
+  btn.textContent = widget.classList.contains('minimized') ? '▲' : '▼';
+}
 function drawMinimap() {
-  const W = 160, H = 130;
+  const W = 240, H = 195;
   mctx.clearRect(0, 0, W, H);
 
   // Background
