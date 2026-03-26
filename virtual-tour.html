@@ -311,6 +311,9 @@
     <button class="btn-icon-text" id="btnNewRoute">
       <svg viewBox="0 0 24 24"><path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/></svg>New Route
     </button>
+    <button class="btn-icon-text" id="btnDuplicateRoute" onclick="duplicateRoute()" title="Duplicate current route">
+      <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>Duplicate
+    </button>
   </div>
   <div class="header-right">
     <button class="btn-icon-text" id="btnExport" onclick="exportRoutes()" title="Export all routes to JSON">
@@ -720,6 +723,29 @@ function confirmNewRoute() {
   const route = { id:'R'+Date.now(), name, desc:document.getElementById('newRouteDesc').value.trim(), nodes:[], floorplan:null };
   routes.push(route);
   closeModal('modalNewRoute');
+  rebuildRouteSelect();
+  selectRoute(routes.length - 1);
+  document.getElementById('welcome').classList.add('hidden');
+  saveRoutes();
+}
+function duplicateRoute() {
+  const src = currentRoute();
+  if (!src) { alert('Select a route to duplicate.'); return; }
+  const copy = {
+    id: 'R' + Date.now(),
+    name: src.name + ' (copy)',
+    desc: src.desc,
+    floorplan: src.floorplan,
+    nodes: src.nodes.map(n => ({
+      id: n.id, name: n.name, desc: n.desc,
+      image: n.image,
+      thumbUrl: n.thumbUrl || null,
+      mapX: n.mapX, mapY: n.mapY,
+      connections: [...(n.connections || [])],
+      hotspots: (n.hotspots || []).map(h => ({ ...h }))
+    }))
+  };
+  routes.push(copy);
   rebuildRouteSelect();
   selectRoute(routes.length - 1);
   document.getElementById('welcome').classList.add('hidden');
