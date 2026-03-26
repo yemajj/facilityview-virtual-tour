@@ -240,6 +240,7 @@
   .map-canvas-wrap { flex:1; position:relative; overflow:hidden; background:#080a0d; cursor:crosshair; }
   .map-canvas-wrap.mode-select { cursor:default; }
   .map-canvas-wrap.mode-drag { cursor:move; }
+  .map-canvas-wrap.mode-connect { cursor:pointer; }
   #mapEditorCanvas { display:block; width:100%; height:100%; }
 
   /* Map editor sidebar */
@@ -497,6 +498,10 @@
             <svg viewBox="0 0 24 24"><path d="M10 9h4V6h3l-5-5-5 5h3v3zm-1 1H6V7l-5 5 5 5v-3h3v-4zm14 2l-5-5v3h-3v4h3v3l5-5zm-9 3h-4v3H7l5 5 5-5h-3v-3z"/></svg>
             Move
           </button>
+          <button class="tool-btn" id="toolConnect" onclick="setTool('connect')">
+            <svg viewBox="0 0 24 24"><path d="M3.9 12c0-1.71 1.39-3.1 3.1-3.1h4V7H7c-2.76 0-5 2.24-5 5s2.24 5 5 5h4v-1.9H7c-1.71 0-3.1-1.39-3.1-3.1zM8 13h8v-2H8v2zm9-6h-4v1.9h4c1.71 0 3.1 1.39 3.1 3.1s-1.39 3.1-3.1 3.1h-4V17h4c2.76 0 5-2.24 5-5s-2.24-5-5-5z"/></svg>
+            Connect
+          </button>
         </div>
         <div class="map-hint" id="toolHint">
           <b>Click</b> on the map to place the selected node. <b>Select</b> a node from the list below first.
@@ -638,9 +643,10 @@ let pendingNodeImage = null;
 let renameTargetIdx  = -1;
 
 // Map editor state
-let mapTool = 'place';            // 'place' | 'move'
+let mapTool = 'place';            // 'place' | 'move' | 'connect'
 let mapSelectedNodeIdx = -1;      // which node is selected in editor
 let mapDraggingNodeIdx = -1;      // which node is being dragged
+let mapConnectFirstNodeIdx = -1;  // first node selected in connect tool
 let mapDragOffX = 0, mapDragOffY = 0;
 let floorplanImg = null;          // optional background image
 let mapEditorOpen = false;
@@ -787,6 +793,7 @@ function confirmAddNode() {
     desc: document.getElementById('newNodeDesc').value.trim(),
     image: pendingNodeImage,
     mapX: null, mapY: null,  // null = unplaced
+    connections: [],
     hotspots: []
   };
   nodes.push(node);
@@ -1015,21 +1022,34 @@ function buildHotspots(index) {
   const nodes = currentNodes();
   const current = nodes[index];
   const targets = [];
-  if (index > 0) {
-    const prev = nodes[index-1];
-    // Compute bearing from current node toward prev using map coordinates.
-    // Formula matches minimap yaw convention: 0=up (north), canvas Y increases downward.
-    let angle = Math.PI; // fallback: face backward
-    if (current && current.mapX !== null && prev.mapX !== null)
-      angle = Math.atan2(prev.mapX - current.mapX, prev.mapY - current.mapY);
-    targets.push({ idx: index-1, angle, label: '← ' + prev.name });
-  }
-  if (index < nodes.length-1) {
-    const next = nodes[index+1];
-    let angle = 0; // fallback: face forward
-    if (current && current.mapX !== null && next.mapX !== null)
-      angle = Math.atan2(next.mapX - current.mapX, next.mapY - current.mapY);
-    targets.push({ idx: index+1, angle, label: next.name + ' →' });
+  const connIds = (current && current.connections && current.connections.length) ? current.connections : null;
+  if (connIds) {
+    // Non-linear: use explicit connections
+    connIds.forEach(targetId => {
+      const targetIdx = nodes.findIndex(n => n.id === targetId);
+      if (targetIdx < 0) return;
+      const target = nodes[targetIdx];
+      let angle = 0;
+      if (current.mapX !== null && target.mapX !== null)
+        angle = Math.atan2(target.mapX - current.mapX, target.mapY - current.mapY);
+      targets.push({ idx: targetIdx, angle, label: target.name });
+    });
+  } else {
+    // Linear fallback: prev / next in array order
+    if (index > 0) {
+      const prev = nodes[index-1];
+      let angle = Math.PI;
+      if (current && current.mapX !== null && prev.mapX !== null)
+        angle = Math.atan2(prev.mapX - current.mapX, prev.mapY - current.mapY);
+      targets.push({ idx: index-1, angle, label: '← ' + prev.name });
+    }
+    if (index < nodes.length-1) {
+      const next = nodes[index+1];
+      let angle = 0;
+      if (current && current.mapX !== null && next.mapX !== null)
+        angle = Math.atan2(next.mapX - current.mapX, next.mapY - current.mapY);
+      targets.push({ idx: index+1, angle, label: next.name + ' →' });
+    }
   }
   targets.forEach(t => {
     const el = document.createElement('div');
@@ -1128,16 +1148,31 @@ function drawMinimap() {
 
   function toMM(nx, ny) { return [nx * scaleX + offX, -ny * scaleY + offY]; }
 
-  // Draw path line
+  // Draw sequential order lines (faint)
   for (let i = 0; i < nodes.length - 1; i++) {
     const a = nodes[i], b = nodes[i+1];
     if (a.mapX === null || b.mapX === null) continue;
     const [ax, ay] = toMM(a.mapX, a.mapY);
     const [bx, by] = toMM(b.mapX, b.mapY);
-    mctx.strokeStyle = i < currentNodeIdx ? 'rgba(240,165,0,0.5)' : '#1e2530';
-    mctx.lineWidth = 1.5;
+    mctx.strokeStyle = '#1e2530';
+    mctx.lineWidth = 1;
     mctx.beginPath(); mctx.moveTo(ax, ay); mctx.lineTo(bx, by); mctx.stroke();
   }
+
+  // Draw explicit connections (cyan)
+  nodes.forEach((node, i) => {
+    if (node.mapX === null || !node.connections || !node.connections.length) return;
+    node.connections.forEach(targetId => {
+      const target = nodes.find(n => n.id === targetId);
+      if (!target || target.mapX === null) return;
+      if (nodes.indexOf(target) <= i) return;
+      const [ax, ay] = toMM(node.mapX, node.mapY);
+      const [bx, by] = toMM(target.mapX, target.mapY);
+      mctx.strokeStyle = 'rgba(0,200,255,0.35)';
+      mctx.lineWidth = 1.5;
+      mctx.beginPath(); mctx.moveTo(ax, ay); mctx.lineTo(bx, by); mctx.stroke();
+    });
+  });
 
   // Draw nodes
   nodes.forEach((node, i) => {
@@ -1232,13 +1267,18 @@ window.addEventListener('resize', () => { resizeCanvas(); if (mapEditorOpen) res
 
 function setTool(tool) {
   mapTool = tool;
+  mapConnectFirstNodeIdx = -1;
   document.getElementById('toolPlace').classList.toggle('active', tool === 'place');
   document.getElementById('toolMove').classList.toggle('active', tool === 'move');
+  document.getElementById('toolConnect').classList.toggle('active', tool === 'connect');
   const wrap = document.getElementById('mapCanvasWrap');
-  wrap.className = 'map-canvas-wrap mode-' + (tool === 'place' ? 'default' : 'select');
+  wrap.className = 'map-canvas-wrap mode-' + (tool === 'place' ? 'default' : tool === 'move' ? 'drag' : 'connect');
   document.getElementById('toolHint').innerHTML = tool === 'place'
     ? '<b>Click</b> on the map to place the selected node. <b>Select</b> a node from the list first.'
-    : '<b>Click & drag</b> any placed node to reposition it.';
+    : tool === 'move'
+    ? '<b>Click & drag</b> any placed node to reposition it.'
+    : '<b>Click</b> a node, then <b>click</b> another to add/remove a connection.';
+  drawMapEditor();
 }
 
 function buildEditorNodeList() {
@@ -1316,24 +1356,46 @@ function drawMapEditor() {
     return;
   }
 
-  // Draw path lines between placed nodes
+  // Draw sequential order lines (faint dashes — always visible as reference)
   for (let i = 0; i < nodes.length - 1; i++) {
     const a = nodes[i], b = nodes[i+1];
     if (a.mapX === null || b.mapX === null) continue;
-    meCtx.strokeStyle = 'rgba(240,165,0,0.3)';
-    meCtx.lineWidth = 1.5;
-    meCtx.setLineDash([5, 5]);
+    meCtx.strokeStyle = 'rgba(240,165,0,0.15)';
+    meCtx.lineWidth = 1;
+    meCtx.setLineDash([4, 6]);
     meCtx.beginPath(); meCtx.moveTo(a.mapX, a.mapY); meCtx.lineTo(b.mapX, b.mapY); meCtx.stroke();
     meCtx.setLineDash([]);
+  }
 
-    // Midpoint arrow showing direction
-    const mx = (a.mapX + b.mapX) / 2, my = (a.mapY + b.mapY) / 2;
-    const ang = Math.atan2(b.mapY - a.mapY, b.mapX - a.mapX);
-    meCtx.save();
-    meCtx.translate(mx, my); meCtx.rotate(ang);
-    meCtx.fillStyle = 'rgba(240,165,0,0.4)';
-    meCtx.beginPath(); meCtx.moveTo(5,0); meCtx.lineTo(-4,-4); meCtx.lineTo(-4,4); meCtx.closePath(); meCtx.fill();
-    meCtx.restore();
+  // Draw explicit connection lines (solid cyan)
+  nodes.forEach((node, i) => {
+    if (node.mapX === null || !node.connections || !node.connections.length) return;
+    node.connections.forEach(targetId => {
+      const target = nodes.find(n => n.id === targetId);
+      if (!target || target.mapX === null) return;
+      if (nodes.indexOf(target) <= i) return; // draw each pair once
+      meCtx.strokeStyle = 'rgba(0,200,255,0.55)';
+      meCtx.lineWidth = 2;
+      meCtx.setLineDash([]);
+      meCtx.beginPath(); meCtx.moveTo(node.mapX, node.mapY); meCtx.lineTo(target.mapX, target.mapY); meCtx.stroke();
+      // midpoint arrow
+      const mx2 = (node.mapX + target.mapX) / 2, my2 = (node.mapY + target.mapY) / 2;
+      const ang = Math.atan2(target.mapY - node.mapY, target.mapX - node.mapX);
+      meCtx.save(); meCtx.translate(mx2, my2); meCtx.rotate(ang);
+      meCtx.fillStyle = 'rgba(0,200,255,0.6)';
+      meCtx.beginPath(); meCtx.moveTo(5,0); meCtx.lineTo(-4,-3); meCtx.lineTo(-4,3); meCtx.closePath(); meCtx.fill();
+      meCtx.restore();
+    });
+  });
+
+  // In connect mode: highlight first-selected node with a pulsing ring
+  if (mapTool === 'connect' && mapConnectFirstNodeIdx >= 0) {
+    const fn = nodes[mapConnectFirstNodeIdx];
+    if (fn && fn.mapX !== null) {
+      meCtx.beginPath(); meCtx.arc(fn.mapX, fn.mapY, 20, 0, Math.PI*2);
+      meCtx.strokeStyle = 'rgba(0,200,255,0.7)'; meCtx.lineWidth = 2;
+      meCtx.setLineDash([4, 4]); meCtx.stroke(); meCtx.setLineDash([]);
+    }
   }
 
   // Draw nodes
@@ -1394,6 +1456,45 @@ mapEdCanvas.addEventListener('mousedown', e => {
   const rect = mapEdCanvas.getBoundingClientRect();
   const mx = e.clientX - rect.left, my = e.clientY - rect.top;
   const nodes = currentNodes();
+
+  if (mapTool === 'connect') {
+    let clickedIdx = -1;
+    for (let i = 0; i < nodes.length; i++) {
+      const n = nodes[i];
+      if (n.mapX === null) continue;
+      if (Math.hypot(mx - n.mapX, my - n.mapY) <= 14) { clickedIdx = i; break; }
+    }
+    if (clickedIdx < 0) {
+      mapConnectFirstNodeIdx = -1;
+      drawMapEditor();
+      return;
+    }
+    if (mapConnectFirstNodeIdx < 0) {
+      mapConnectFirstNodeIdx = clickedIdx;
+      mapSelectedNodeIdx = clickedIdx;
+      buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor();
+    } else if (mapConnectFirstNodeIdx === clickedIdx) {
+      mapConnectFirstNodeIdx = -1;
+      drawMapEditor();
+    } else {
+      const nA = nodes[mapConnectFirstNodeIdx], nB = nodes[clickedIdx];
+      nA.connections = nA.connections || [];
+      nB.connections = nB.connections || [];
+      if (nA.connections.includes(nB.id)) {
+        nA.connections = nA.connections.filter(id => id !== nB.id);
+        nB.connections = nB.connections.filter(id => id !== nA.id);
+      } else {
+        nA.connections.push(nB.id);
+        nB.connections.push(nA.id);
+      }
+      mapConnectFirstNodeIdx = -1;
+      mapSelectedNodeIdx = clickedIdx;
+      buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor();
+      saveRoutes();
+      if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
+    }
+    return;
+  }
 
   if (mapTool === 'move') {
     // Find nearest placed node within hit radius
@@ -1668,6 +1769,7 @@ function saveRoutes() {
       id: n.id, name: n.name, desc: n.desc,
       imageSrc: n.image ? n.image.src : null,
       mapX: n.mapX, mapY: n.mapY,
+      connections: n.connections || [],
       hotspots: n.hotspots || []
     }))
   }));
@@ -1696,7 +1798,7 @@ async function loadRoutes() {
           const image = new Image();
           promises.push(new Promise(res => { image.onload = image.onerror = res; }));
           image.src = nd.imageSrc;
-          route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, hotspots: nd.hotspots || [] });
+          route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, connections: nd.connections || [], hotspots: nd.hotspots || [] });
         });
         routes.push(route);
       });
@@ -1727,6 +1829,7 @@ function exportRoutes() {
         id: n.id, name: n.name, desc: n.desc,
         imageSrc: n.image ? n.image.src : null,
         mapX: n.mapX, mapY: n.mapY,
+        connections: n.connections || [],
         hotspots: n.hotspots || []
       }))
     }))
@@ -1760,7 +1863,7 @@ async function importRoutes(file) {
         const image = new Image();
         promises.push(new Promise(res => { image.onload = image.onerror = res; }));
         image.src = nd.imageSrc;
-        route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, hotspots: nd.hotspots || [] });
+        route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, connections: nd.connections || [], hotspots: nd.hotspots || [] });
       });
       imported.push(route);
     });
