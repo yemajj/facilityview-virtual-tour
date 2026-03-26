@@ -806,6 +806,14 @@ function navigateTo(index) {
   if (index < 0 || index >= nodes.length) return;
   const hotspotsEl = document.getElementById('hotspots');
 
+  // Compute arrival bearing (direction user was traveling) before switching nodes
+  let arrivalYaw = null;
+  if (currentNodeIdx >= 0 && currentNodeIdx !== index) {
+    const from = nodes[currentNodeIdx], to = nodes[index];
+    if (from && from.mapX !== null && to && to.mapX !== null)
+      arrivalYaw = Math.atan2(to.mapX - from.mapX, to.mapY - from.mapY);
+  }
+
   // Capture current frame to fadeCanvas for crossfade transition
   if (img) {
     fadeCanvas.width = canvas.width;
@@ -825,6 +833,7 @@ function navigateTo(index) {
   flash.classList.add('active');
   setTimeout(() => flash.classList.remove('active'), 150);
   resetView();
+  if (arrivalYaw !== null) yaw = arrivalYaw; // face the direction of travel
   buildSidebar(); updateHeaders(nodes[index], index);
   buildHotspots(index); drawMinimap(); updateRouteProgress(index);
   renderFrame(); // new frame renders on main canvas under the fade overlay
@@ -940,14 +949,14 @@ function buildHotspots(index) {
     // Formula matches minimap yaw convention: 0=up (north), canvas Y increases downward.
     let angle = Math.PI; // fallback: face backward
     if (current && current.mapX !== null && prev.mapX !== null)
-      angle = Math.atan2(prev.mapX - current.mapX, current.mapY - prev.mapY);
+      angle = Math.atan2(prev.mapX - current.mapX, prev.mapY - current.mapY);
     targets.push({ idx: index-1, angle, label: '← ' + prev.name });
   }
   if (index < nodes.length-1) {
     const next = nodes[index+1];
     let angle = 0; // fallback: face forward
     if (current && current.mapX !== null && next.mapX !== null)
-      angle = Math.atan2(next.mapX - current.mapX, current.mapY - next.mapY);
+      angle = Math.atan2(next.mapX - current.mapX, next.mapY - current.mapY);
     targets.push({ idx: index+1, angle, label: next.name + ' →' });
   }
   targets.forEach(t => {
@@ -1041,10 +1050,11 @@ function drawMinimap() {
     const scale = Math.min(scaleX, scaleY, 3.5); // cap zoom
     scaleX = scale; scaleY = scale;
     offX = pad - minX * scale + ((W - pad*2) - rangeX*scale) / 2;
-    offY = pad - minY * scale + ((H - pad*2) - rangeY*scale) / 2;
+    // Y is flipped so north (larger stored Y) appears at top of minimap
+    offY = pad + maxY * scale + ((H - pad*2) - rangeY*scale) / 2;
   }
 
-  function toMM(nx, ny) { return [nx * scaleX + offX, ny * scaleY + offY]; }
+  function toMM(nx, ny) { return [nx * scaleX + offX, -ny * scaleY + offY]; }
 
   // Draw path line
   for (let i = 0; i < nodes.length - 1; i++) {
