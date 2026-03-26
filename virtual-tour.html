@@ -320,6 +320,10 @@
       <svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>
       Add Hotspot
     </button>
+    <button class="btn-icon-text" id="btnManageHotspots" onclick="openManageHotspotsModal()" title="View and edit hotspots on this node">
+      <svg viewBox="0 0 24 24"><path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/></svg>
+      Manage
+    </button>
     <span id="savedIndicator">SAVED</span>
     <div class="status-dot"></div>
     <span class="status-label">SYSTEM ONLINE</span>
@@ -595,8 +599,20 @@
       <select id="hotspotLinkTarget" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:var(--text);font-family:var(--sans);font-size:13px;padding:8px 10px;outline:none;"></select>
     </div>
     <div class="modal-actions">
-      <button class="modal-btn-cancel" onclick="closeModal('modalAddHotspot')">Cancel</button>
-      <button class="modal-btn-ok" onclick="confirmAddHotspot()">Add Hotspot</button>
+      <button class="modal-btn-cancel" onclick="cancelHotspotModal()">Cancel</button>
+      <button class="modal-btn-ok" id="confirmHotspotBtn" onclick="confirmAddHotspot()">Add Hotspot</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-bg" id="modalManageHotspots">
+  <div class="modal" style="min-width:360px;max-width:500px;width:90%">
+    <div class="modal-title">Hotspots</div>
+    <div class="modal-sub">Node: <span id="manageHotspotNodeName">—</span></div>
+    <div id="hotspotManageList" style="max-height:320px;overflow-y:auto;padding-right:2px;"></div>
+    <div class="modal-actions">
+      <button class="modal-btn-cancel" onclick="closeModal('modalManageHotspots')">Close</button>
+      <button class="modal-btn-ok" onclick="closeModal('modalManageHotspots');if(img)toggleHotspotEditMode()">+ Add New</button>
     </div>
   </div>
 </div>
@@ -629,6 +645,8 @@ let isFading = false, fadeTimeout = null;
 // Custom hotspot state
 let hotspotEditMode = false;
 let pendingHotspotYaw = 0, pendingHotspotPitch = 0;
+let editingHotspotId = null;       // null = new, string = editing existing
+let repositioningHotspotId = null; // null = normal, string = reposition in progress
 
 // Settings & inertia
 let sensitivityLevel = 3;         // 1–10 slider value
@@ -1477,7 +1495,19 @@ canvas.addEventListener('click', e => {
   if (Math.hypot(e.clientX - mouseDownX, e.clientY - mouseDownY) > 5) return;
   const pos = canvasClickToYawPitch(e.clientX, e.clientY);
   toggleHotspotEditMode();
-  openAddHotspotModal(pos.yaw, pos.pitch);
+  if (repositioningHotspotId) {
+    const node = currentNodes()[currentNodeIdx];
+    if (node) {
+      const hs = (node.hotspots || []).find(h => h.id === repositioningHotspotId);
+      if (hs) { hs.yaw = pos.yaw; hs.pitch = pos.pitch; }
+    }
+    repositioningHotspotId = null;
+    buildHotspots(currentNodeIdx);
+    saveRoutes();
+    openManageHotspotsModal();
+  } else {
+    openAddHotspotModal(pos.yaw, pos.pitch);
+  }
 });
 window.addEventListener('mouseup', () => {
   if (isDragging && inertiaEnabled) startInertia();
@@ -1799,12 +1829,15 @@ function canvasClickToYawPitch(clientX, clientY) {
   };
 }
 function openAddHotspotModal(yawVal, pitchVal) {
+  editingHotspotId = null;
   pendingHotspotYaw = yawVal; pendingHotspotPitch = pitchVal;
   document.getElementById('hotspotLabel').value = '';
   document.getElementById('hotspotContent').value = '';
   document.getElementById('hotspotType').value = 'info';
   document.getElementById('addHotspotSub').textContent =
     `Yaw: ${Math.round(yawVal * 180 / Math.PI)}°  Pitch: ${Math.round(pitchVal * 180 / Math.PI)}°`;
+  document.querySelector('#modalAddHotspot .modal-title').textContent = 'Add Hotspot';
+  document.getElementById('confirmHotspotBtn').textContent = 'Add Hotspot';
   // Populate link target dropdown
   const sel = document.getElementById('hotspotLinkTarget');
   sel.innerHTML = '';
@@ -1833,16 +1866,119 @@ function confirmAddHotspot() {
   const node = currentNodes()[currentNodeIdx];
   if (!node) return;
   node.hotspots = node.hotspots || [];
-  node.hotspots.push({ id: 'HS' + Date.now(), type, yaw: pendingHotspotYaw, pitch: pendingHotspotPitch, label, content });
+  if (editingHotspotId) {
+    const hs = node.hotspots.find(h => h.id === editingHotspotId);
+    if (hs) { hs.type = type; hs.label = label; hs.content = content; }
+    editingHotspotId = null;
+    closeModal('modalAddHotspot');
+    buildHotspots(currentNodeIdx);
+    saveRoutes();
+    openManageHotspotsModal();
+  } else {
+    node.hotspots.push({ id: 'HS' + Date.now(), type, yaw: pendingHotspotYaw, pitch: pendingHotspotPitch, label, content });
+    closeModal('modalAddHotspot');
+    buildHotspots(currentNodeIdx);
+    saveRoutes();
+  }
+}
+function cancelHotspotModal() {
+  const wasEditing = !!editingHotspotId;
+  editingHotspotId = null;
   closeModal('modalAddHotspot');
-  buildHotspots(currentNodeIdx);
-  saveRoutes();
+  if (wasEditing) openManageHotspotsModal();
 }
 function deleteHotspot(nodeIdx, hotspotId) {
   const node = currentNodes()[nodeIdx]; if (!node) return;
   node.hotspots = (node.hotspots || []).filter(h => h.id !== hotspotId);
   buildHotspots(currentNodeIdx);
   saveRoutes();
+}
+function openManageHotspotsModal() {
+  const node = currentNodes()[currentNodeIdx];
+  document.getElementById('manageHotspotNodeName').textContent = node ? node.name : '—';
+  buildHotspotManageList();
+  openModal('modalManageHotspots');
+}
+function buildHotspotManageList() {
+  const node = currentNodes()[currentNodeIdx];
+  const list = document.getElementById('hotspotManageList');
+  const hotspots = (node && node.hotspots) ? node.hotspots : [];
+  if (!hotspots.length) {
+    list.innerHTML = '<div style="padding:20px 0;font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:1px;text-align:center;">No hotspots on this node yet.</div>';
+    return;
+  }
+  list.innerHTML = '';
+  hotspots.forEach(hs => {
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);';
+    const infoIcon = `<svg viewBox="0 0 24 24" width="14" height="14" fill="var(--accent2)" style="flex-shrink:0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>`;
+    const linkIcon = `<svg viewBox="0 0 24 24" width="14" height="14" fill="var(--success)" style="flex-shrink:0"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`;
+    const badgeColor = hs.type === 'info' ? 'rgba(0,200,255,0.12)' : 'rgba(0,230,118,0.12)';
+    const badgeText = hs.type === 'info' ? 'var(--accent2)' : 'var(--success)';
+    const previewText = hs.type === 'info' ? (hs.content || '—') : ('→ ' + (currentNodes().find(n => n.id === hs.content) || {name: hs.content}).name);
+    row.innerHTML = `
+      ${hs.type === 'info' ? infoIcon : linkIcon}
+      <div style="flex:1;min-width:0;">
+        <div style="font-family:var(--cond);font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${hs.label}</div>
+        <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${previewText}</div>
+      </div>
+      <span style="font-family:var(--mono);font-size:8px;letter-spacing:1px;padding:2px 5px;border-radius:2px;background:${badgeColor};color:${badgeText};flex-shrink:0;">${hs.type.toUpperCase()}</span>
+      <button class="loc-action-btn" title="Edit" data-hsid="${hs.id}" data-action="edit">
+        <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+      </button>
+      <button class="loc-action-btn" title="Reposition" data-hsid="${hs.id}" data-action="reposition">
+        <svg viewBox="0 0 24 24"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06z"/></svg>
+      </button>
+      <button class="loc-action-btn danger" title="Delete" data-hsid="${hs.id}" data-action="delete">
+        <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+      </button>`;
+    list.appendChild(row);
+  });
+  // single delegated listener
+  list.onclick = e => {
+    const btn = e.target.closest('[data-action]');
+    if (!btn) return;
+    const { hsid, action } = btn.dataset;
+    if (action === 'edit') openEditHotspotModal(hsid);
+    else if (action === 'reposition') startRepositionHotspot(hsid);
+    else if (action === 'delete') { if (confirm('Delete this hotspot?')) { deleteHotspot(currentNodeIdx, hsid); buildHotspotManageList(); } }
+  };
+}
+function openEditHotspotModal(hsId) {
+  const node = currentNodes()[currentNodeIdx];
+  if (!node) return;
+  const hs = (node.hotspots || []).find(h => h.id === hsId);
+  if (!hs) return;
+  editingHotspotId = hsId;
+  pendingHotspotYaw = hs.yaw; pendingHotspotPitch = hs.pitch;
+  document.getElementById('hotspotLabel').value = hs.label;
+  document.getElementById('hotspotContent').value = hs.type === 'info' ? (hs.content || '') : '';
+  document.getElementById('hotspotType').value = hs.type;
+  // populate link target select and pre-select current target
+  const sel = document.getElementById('hotspotLinkTarget');
+  sel.innerHTML = '';
+  currentNodes().forEach((n, i) => {
+    if (i === currentNodeIdx) return;
+    const o = document.createElement('option');
+    o.value = n.id; o.textContent = n.id + ': ' + n.name;
+    if (n.id === hs.content) o.selected = true;
+    sel.appendChild(o);
+  });
+  updateHotspotTypeFields();
+  document.getElementById('addHotspotSub').textContent = `Editing: ${hs.label}`;
+  document.querySelector('#modalAddHotspot .modal-title').textContent = 'Edit Hotspot';
+  document.getElementById('confirmHotspotBtn').textContent = 'Save Changes';
+  closeModal('modalManageHotspots');
+  openModal('modalAddHotspot');
+  setTimeout(() => document.getElementById('hotspotLabel').focus(), 100);
+}
+function startRepositionHotspot(hsId) {
+  if (!img) return;
+  repositioningHotspotId = hsId;
+  closeModal('modalManageHotspots');
+  hotspotEditMode = true;
+  canvas.classList.add('hotspot-edit-mode');
+  document.getElementById('btnHotspotEdit').classList.add('hotspot-edit-active');
 }
 function showHotspotInfo(hs) {
   document.getElementById('hotspotInfoTitle').textContent = hs.label;
