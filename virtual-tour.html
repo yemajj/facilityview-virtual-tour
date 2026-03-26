@@ -298,6 +298,22 @@
   .selected-node-name { font-family:var(--cond); font-size:14px; font-weight:700; letter-spacing:1px; color:#fff; margin-bottom:3px; }
   .selected-node-coords { font-family:var(--mono); font-size:9px; color:var(--accent2); letter-spacing:1px; }
   .selected-node-hint { font-family:var(--mono); font-size:9px; color:var(--muted); letter-spacing:1px; margin-top:4px; }
+  .selected-node-floor-label { font-family:var(--mono); font-size:8px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-top:8px; margin-bottom:3px; }
+  .selected-node-floor-select { width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:4px 6px; font-family:var(--mono); font-size:10px; border-radius:2px; cursor:pointer; }
+  .selected-node-floor-select:focus { outline:none; border-color:var(--accent); }
+
+  /* Floor tabs bar */
+  .floor-tabs-bar { display:flex; align-items:center; height:36px; background:var(--panel); border-bottom:1px solid var(--border); flex-shrink:0; overflow:hidden; }
+  .floor-tabs-scroll { display:flex; align-items:stretch; flex:1; overflow-x:auto; scrollbar-width:none; height:100%; }
+  .floor-tabs-scroll::-webkit-scrollbar { display:none; }
+  .floor-tab { display:flex; align-items:center; gap:5px; padding:0 12px; height:100%; border-right:1px solid var(--border); font-family:var(--cond); font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; color:var(--muted); cursor:pointer; white-space:nowrap; flex-shrink:0; transition:background 0.15s, color 0.15s; user-select:none; }
+  .floor-tab:hover { background:rgba(255,255,255,0.03); color:var(--text); }
+  .floor-tab.active { color:var(--accent); background:rgba(240,165,0,0.08); border-bottom:2px solid var(--accent); }
+  .floor-tab-close { display:inline-flex; align-items:center; justify-content:center; width:14px; height:14px; border-radius:50%; font-size:10px; line-height:1; color:var(--muted); cursor:pointer; transition:background 0.1s, color 0.1s; margin-left:2px; }
+  .floor-tab-close:hover { background:rgba(255,68,68,0.2); color:#ff4444; }
+  .floor-add-btn { width:36px; height:100%; flex-shrink:0; background:transparent; border:none; border-left:1px solid var(--border); color:var(--muted); font-size:20px; cursor:pointer; transition:color 0.15s, background 0.15s; display:flex; align-items:center; justify-content:center; line-height:1; }
+  .floor-add-btn:hover { color:var(--accent); background:rgba(240,165,0,0.07); }
+  .editor-node-floor { font-family:var(--mono); font-size:8px; color:var(--muted); letter-spacing:1px; flex-shrink:0; }
 </style>
 </head>
 <body>
@@ -499,6 +515,11 @@
     </div>
   </div>
 
+  <div class="floor-tabs-bar" id="floorTabsBar">
+    <div class="floor-tabs-scroll" id="floorTabsScroll"></div>
+    <button class="floor-add-btn" onclick="addFloor()" title="Add new floor">+</button>
+  </div>
+
   <div class="map-editor-body">
     <!-- Canvas -->
     <div class="map-canvas-wrap" id="mapCanvasWrap">
@@ -679,8 +700,11 @@ let mapSelectedNodeIdx = -1;      // which node is selected in editor
 let mapDraggingNodeIdx = -1;      // which node is being dragged
 let mapConnectFirstNodeIdx = -1;  // first node selected in connect tool
 let mapDragOffX = 0, mapDragOffY = 0;
-let floorplanImg = null;          // optional background image
+let mapCurrentFloorId = null;     // ID of floor being viewed in map editor
 let mapEditorOpen = false;
+let mapUndoStack = [];            // snapshots for undo
+let mapRedoStack = [];            // snapshots for redo
+const MAP_UNDO_LIMIT = 50;
 
 // Crossfade state
 let isFading = false, fadeTimeout = null;
@@ -750,7 +774,7 @@ function openNewRouteModal() {
 function confirmNewRoute() {
   const name = document.getElementById('newRouteName').value.trim();
   if (!name) { document.getElementById('newRouteName').focus(); return; }
-  const route = { id:'R'+Date.now(), name, desc:document.getElementById('newRouteDesc').value.trim(), nodes:[], floorplan:null };
+  const route = { id:'R'+Date.now(), name, desc:document.getElementById('newRouteDesc').value.trim(), nodes:[], floors:[{id:'F0',name:'Floor 1',image:null}] };
   routes.push(route);
   closeModal('modalNewRoute');
   rebuildRouteSelect();
@@ -765,12 +789,13 @@ function duplicateRoute() {
     id: 'R' + Date.now(),
     name: src.name + ' (copy)',
     desc: src.desc,
-    floorplan: src.floorplan,
+    floors: (src.floors || []).map(f => ({ id: f.id, name: f.name, image: f.image })),
     nodes: src.nodes.map(n => ({
       id: n.id, name: n.name, desc: n.desc,
       image: n.image,
       thumbUrl: n.thumbUrl || null,
       mapX: n.mapX, mapY: n.mapY,
+      floorId: n.floorId || null,
       connections: [...(n.connections || [])],
       hotspots: (n.hotspots || []).map(h => ({ ...h }))
     }))
@@ -802,7 +827,6 @@ function selectRoute(idx) {
   const route = currentRoute();
   document.getElementById('sidebarRouteBadge').textContent = route ? route.name : 'NO ROUTE';
   document.getElementById('routeSelect').value = idx;
-  floorplanImg = route?.floorplan || null;
   buildSidebar(); drawMinimap(); updateNodeCount();
   document.getElementById('overlay').style.opacity = '0';
   document.getElementById('hotspots').style.opacity = '0';
@@ -854,6 +878,7 @@ function confirmAddNode() {
     desc: document.getElementById('newNodeDesc').value.trim(),
     image: pendingNodeImage || null,
     mapX: null, mapY: null,  // null = unplaced
+    floorId: null,
     connections: [],
     hotspots: []
   };
@@ -1314,7 +1339,24 @@ function drawMinimap() {
   mctx.fillStyle = '#080a0d';
   mctx.fillRect(0, 0, W, H);
 
-  const nodes = currentNodes();
+  const allNodes = currentNodes();
+  if (!allNodes.length) return;
+
+  // Determine active floor from current node
+  const route = currentRoute();
+  const curNode = allNodes[currentNodeIdx];
+  const activeFloorId = curNode?.floorId || null;
+  const activeFloor = (route?.floors || []).find(f => f.id === activeFloorId);
+
+  // Show floor image if available
+  if (activeFloor?.image) {
+    mctx.globalAlpha = 0.2;
+    mctx.drawImage(activeFloor.image, 0, 0, W, H);
+    mctx.globalAlpha = 1;
+  }
+
+  // Show nodes on the active floor (plus unassigned nodes which show everywhere)
+  const nodes = allNodes.filter(n => n.floorId === activeFloorId || n.floorId === null);
   if (!nodes.length) return;
 
   // Compute bounds to auto-fit placed nodes
@@ -1337,10 +1379,11 @@ function drawMinimap() {
 
   function toMM(nx, ny) { return [nx * scaleX + offX, ny * scaleY + offY]; }
 
-  // Draw sequential order lines (faint)
-  for (let i = 0; i < nodes.length - 1; i++) {
-    const a = nodes[i], b = nodes[i+1];
+  // Draw sequential order lines (faint) — only between nodes on this floor
+  for (let i = 0; i < allNodes.length - 1; i++) {
+    const a = allNodes[i], b = allNodes[i+1];
     if (a.mapX === null || b.mapX === null) continue;
+    if (!nodes.includes(a) || !nodes.includes(b)) continue;
     const [ax, ay] = toMM(a.mapX, a.mapY);
     const [bx, by] = toMM(b.mapX, b.mapY);
     mctx.strokeStyle = '#1e2530';
@@ -1364,11 +1407,12 @@ function drawMinimap() {
   });
 
   // Draw nodes
-  nodes.forEach((node, i) => {
+  nodes.forEach(node => {
     if (node.mapX === null) return;
     const [x, y] = toMM(node.mapX, node.mapY);
-    const isActive = i === currentNodeIdx;
-    const isPast   = i < currentNodeIdx;
+    const origIdx = allNodes.indexOf(node);
+    const isActive = origIdx === currentNodeIdx;
+    const isPast   = origIdx < currentNodeIdx;
 
     // Pulse ring for active
     if (isActive) {
@@ -1431,19 +1475,56 @@ function drawMinimap() {
 // ══════════════════════════════════════════════════
 function openMapEditor() {
   if (!currentRoute()) return;
+  const route = currentRoute();
+  route.floors = route.floors || [{ id: 'F0', name: 'Floor 1', image: null }];
   mapEditorOpen = true;
   mapSelectedNodeIdx = -1;
   mapDraggingNodeIdx = -1;
-  document.getElementById('mapEditorRouteName').textContent = '— ' + currentRoute().name;
+  mapUndoStack = []; mapRedoStack = [];
+  mapCurrentFloorId = route.floors[0]?.id || null;
+  document.getElementById('mapEditorRouteName').textContent = '— ' + route.name;
   document.getElementById('mapEditorBg').classList.add('open');
   resizeMapEditor();
+  buildFloorTabs();
   buildEditorNodeList();
   drawMapEditor();
 }
 function closeMapEditor() {
   document.getElementById('mapEditorBg').classList.remove('open');
   mapEditorOpen = false;
+  mapUndoStack = []; mapRedoStack = [];
   drawMinimap(); // refresh minimap with new positions
+}
+
+// ── Undo / Redo ──
+function mapSnapshot() {
+  return currentNodes().map(n => ({ id: n.id, mapX: n.mapX, mapY: n.mapY, connections: [...(n.connections || [])] }));
+}
+function applySnapshot(snap) {
+  const nodes = currentNodes();
+  snap.forEach(s => {
+    const n = nodes.find(nd => nd.id === s.id);
+    if (n) { n.mapX = s.mapX; n.mapY = s.mapY; n.connections = [...s.connections]; }
+  });
+}
+function pushUndo() {
+  mapUndoStack.push(mapSnapshot());
+  if (mapUndoStack.length > MAP_UNDO_LIMIT) mapUndoStack.shift();
+  mapRedoStack = [];
+}
+function mapUndo() {
+  if (!mapUndoStack.length) return;
+  mapRedoStack.push(mapSnapshot());
+  applySnapshot(mapUndoStack.pop());
+  buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor(); saveRoutes();
+  if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
+}
+function mapRedo() {
+  if (!mapRedoStack.length) return;
+  mapUndoStack.push(mapSnapshot());
+  applySnapshot(mapRedoStack.pop());
+  buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor(); saveRoutes();
+  if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
 }
 
 function resizeMapEditor() {
@@ -1483,9 +1564,11 @@ function buildEditorNodeList() {
     const el = document.createElement('div');
     const isPlaced = node.mapX !== null;
     el.className = 'editor-node-item ' + (isPlaced ? 'placed' : 'unplaced') + (i === mapSelectedNodeIdx ? ' selected' : '');
+    const floorName = (currentRoute()?.floors || []).find(f => f.id === node.floorId)?.name || '—';
     el.innerHTML = `
       <div class="editor-node-dot"></div>
       <div class="editor-node-label">${node.name}</div>
+      <div class="editor-node-floor">${floorName}</div>
       <div class="editor-node-id">${node.id}</div>`;
     el.addEventListener('click', () => {
       mapSelectedNodeIdx = i;
@@ -1500,16 +1583,109 @@ function buildEditorNodeList() {
 
 function updateSelectedNodeInfo() {
   const el   = document.getElementById('selectedNodeInfo');
-  const node = currentNodes()[mapSelectedNodeIdx];
+  const nodes = currentNodes();
+  const node = nodes[mapSelectedNodeIdx];
   if (!node) {
     el.innerHTML = '<div class="selected-node-info-empty">Select a node from the list below to place or move it on the map.</div>';
     return;
   }
   const isPlaced = node.mapX !== null;
+  const route = currentRoute();
+  const floorOptions = (route?.floors || []).map(f =>
+    `<option value="${f.id}" ${node.floorId === f.id ? 'selected' : ''}>${f.name}</option>`).join('');
   el.innerHTML = `
     <div class="selected-node-name">${node.id}: ${node.name}</div>
     <div class="selected-node-coords">${isPlaced ? `X:${Math.round(node.mapX)}  Y:${Math.round(node.mapY)}` : 'Not yet placed'}</div>
-    <div class="selected-node-hint">${mapTool === 'place' ? (isPlaced ? 'Click map to move to new position.' : 'Click anywhere on the map to place.') : 'Drag the node dot on the map to reposition.'}</div>`;
+    <div class="selected-node-hint">${mapTool === 'place' ? (isPlaced ? 'Click map to move to new position.' : 'Click anywhere on the map to place.') : 'Drag the node dot on the map to reposition.'}</div>
+    <div class="selected-node-floor-label">Floor</div>
+    <select class="selected-node-floor-select" onchange="assignNodeFloor(${mapSelectedNodeIdx}, this.value)">
+      <option value="" ${!node.floorId ? 'selected' : ''}>— Unassigned —</option>
+      ${floorOptions}
+    </select>`;
+}
+
+// ── Floor tab functions ──
+function buildFloorTabs() {
+  const route = currentRoute(); if (!route) return;
+  const scroll = document.getElementById('floorTabsScroll');
+  scroll.innerHTML = '';
+  (route.floors || []).forEach(floor => {
+    const tab = document.createElement('div');
+    tab.className = 'floor-tab' + (floor.id === mapCurrentFloorId ? ' active' : '');
+    const nameSpan = document.createElement('span');
+    nameSpan.className = 'floor-tab-name';
+    nameSpan.textContent = floor.name;
+    const closeBtn = document.createElement('span');
+    closeBtn.className = 'floor-tab-close';
+    closeBtn.title = 'Delete floor';
+    closeBtn.textContent = '✕';
+    closeBtn.addEventListener('click', e => { e.stopPropagation(); deleteFloor(floor.id); });
+    tab.appendChild(nameSpan);
+    tab.appendChild(closeBtn);
+    tab.addEventListener('click', () => switchFloor(floor.id));
+    tab.addEventListener('dblclick', e => {
+      if (e.target === closeBtn) return;
+      startFloorRename(floor.id, nameSpan);
+    });
+    scroll.appendChild(tab);
+  });
+}
+function switchFloor(floorId) {
+  mapCurrentFloorId = floorId;
+  buildFloorTabs();
+  // Update "Remove Floor Plan" button visibility
+  const route = currentRoute();
+  const floor = (route?.floors || []).find(f => f.id === floorId);
+  document.getElementById('btnClearFloorplan').style.display = floor?.image ? 'flex' : 'none';
+  drawMapEditor();
+}
+function addFloor() {
+  const route = currentRoute(); if (!route) return;
+  const name = prompt('Floor name:', 'Floor ' + (route.floors.length + 1));
+  if (!name || !name.trim()) return;
+  const floor = { id: 'F' + Date.now(), name: name.trim(), image: null };
+  route.floors.push(floor);
+  switchFloor(floor.id);
+  saveRoutes();
+}
+function deleteFloor(floorId) {
+  const route = currentRoute(); if (!route) return;
+  if (route.floors.length <= 1) { alert('A route must have at least one floor.'); return; }
+  const assigned = currentNodes().filter(n => n.floorId === floorId);
+  if (assigned.length > 0) {
+    if (!confirm(`${assigned.length} node(s) are on this floor. Delete floor and unassign them?`)) return;
+    assigned.forEach(n => { n.floorId = null; });
+  }
+  route.floors = route.floors.filter(f => f.id !== floorId);
+  if (mapCurrentFloorId === floorId) mapCurrentFloorId = route.floors[0]?.id || null;
+  buildFloorTabs(); buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor();
+  saveRoutes();
+}
+function startFloorRename(floorId, nameEl) {
+  const route = currentRoute(); if (!route) return;
+  const floor = route.floors.find(f => f.id === floorId); if (!floor) return;
+  const input = document.createElement('input');
+  input.value = floor.name;
+  input.style.cssText = 'font:inherit;background:var(--bg);color:var(--text);border:1px solid var(--accent);border-radius:2px;padding:1px 4px;width:90px;font-size:11px;';
+  nameEl.replaceWith(input);
+  input.focus(); input.select();
+  const commit = () => {
+    const val = input.value.trim() || floor.name;
+    floor.name = val;
+    input.replaceWith(nameEl);
+    nameEl.textContent = val;
+    buildFloorTabs(); saveRoutes();
+  };
+  input.addEventListener('blur', commit);
+  input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+    if (e.key === 'Escape') { input.value = floor.name; input.blur(); }
+  });
+}
+function assignNodeFloor(nodeIdx, floorId) {
+  const node = currentNodes()[nodeIdx]; if (!node) return;
+  node.floorId = floorId || null;
+  updateSelectedNodeInfo(); drawMapEditor(); saveRoutes();
 }
 
 // ── Map editor canvas drawing ──
@@ -1528,11 +1704,12 @@ function drawMapEditor() {
   for (let x = 0; x < W; x += gs) { meCtx.beginPath(); meCtx.moveTo(x,0); meCtx.lineTo(x,H); meCtx.stroke(); }
   for (let y = 0; y < H; y += gs) { meCtx.beginPath(); meCtx.moveTo(0,y); meCtx.lineTo(W,y); meCtx.stroke(); }
 
-  // Floor plan image
+  // Floor plan image for current floor
   const route = currentRoute();
-  if (route && route.floorplan) {
+  const currentFloor = (route?.floors || []).find(f => f.id === mapCurrentFloorId);
+  if (currentFloor?.image) {
     meCtx.globalAlpha = 0.35;
-    meCtx.drawImage(route.floorplan, 0, 0, W, H);
+    meCtx.drawImage(currentFloor.image, 0, 0, W, H);
     meCtx.globalAlpha = 1;
   }
 
@@ -1556,13 +1733,15 @@ function drawMapEditor() {
     meCtx.setLineDash([]);
   }
 
-  // Draw explicit connection lines (solid cyan)
+  // Draw explicit connection lines (solid cyan — same floor only; cross-floor shown as badge on nodes)
   nodes.forEach((node, i) => {
     if (node.mapX === null || !node.connections || !node.connections.length) return;
     node.connections.forEach(targetId => {
       const target = nodes.find(n => n.id === targetId);
       if (!target || target.mapX === null) return;
       if (nodes.indexOf(target) <= i) return; // draw each pair once
+      // Cross-floor connections are not drawn as lines — shown as badge instead
+      if (node.floorId !== target.floorId) return;
       meCtx.strokeStyle = 'rgba(0,200,255,0.55)';
       meCtx.lineWidth = 2;
       meCtx.setLineDash([]);
@@ -1593,6 +1772,17 @@ function drawMapEditor() {
     const x = node.mapX, y = node.mapY;
     const isSelected = i === mapSelectedNodeIdx;
     const isActive   = i === currentNodeIdx;
+    // In connect mode all nodes are full opacity (clickable cross-floor targets)
+    // In place/move mode, dim nodes on other floors
+    const onThisFloor = node.floorId === mapCurrentFloorId || node.floorId === null;
+    const isDimmed = mapTool !== 'connect' && !onThisFloor;
+    const hasCrossFloorLink = (node.connections || []).some(id => {
+      const t = nodes.find(n => n.id === id);
+      return t && t.floorId !== node.floorId;
+    });
+
+    meCtx.save();
+    if (isDimmed) { meCtx.globalAlpha = 0.22; meCtx.filter = 'grayscale(100%)'; }
 
     // Outer ring
     meCtx.beginPath(); meCtx.arc(x, y, isSelected ? 16 : 12, 0, Math.PI*2);
@@ -1618,6 +1808,18 @@ function drawMapEditor() {
     meCtx.font = '10px monospace';
     meCtx.fillStyle = isSelected ? '#f0a500' : 'rgba(200,212,224,0.7)';
     meCtx.fillText(node.name, x, y + 22);
+
+    meCtx.restore();
+
+    // Cross-floor connection badge (↕) — drawn after restore so it's always visible
+    if (hasCrossFloorLink) {
+      meCtx.font = 'bold 10px monospace';
+      meCtx.fillStyle = 'rgba(0,200,255,0.9)';
+      meCtx.textAlign = 'center';
+      meCtx.textBaseline = 'middle';
+      meCtx.fillText('↕', x + 12, y - 10);
+      meCtx.textBaseline = 'alphabetic';
+    }
   });
 
   // Unplaced nodes shown in corner
@@ -1666,6 +1868,7 @@ mapEdCanvas.addEventListener('mousedown', e => {
       mapConnectFirstNodeIdx = -1;
       drawMapEditor();
     } else {
+      pushUndo();
       const nA = nodes[mapConnectFirstNodeIdx], nB = nodes[clickedIdx];
       nA.connections = nA.connections || [];
       nB.connections = nB.connections || [];
@@ -1692,6 +1895,7 @@ mapEdCanvas.addEventListener('mousedown', e => {
       if (n.mapX === null) continue;
       const dist = Math.hypot(mx - n.mapX, my - n.mapY);
       if (dist <= 14) {
+        pushUndo();
         mapDraggingNodeIdx = i;
         mapDragOffX = mx - n.mapX;
         mapDragOffY = my - n.mapY;
@@ -1707,8 +1911,10 @@ mapEdCanvas.addEventListener('mousedown', e => {
   } else {
     // Place tool — click to place selected node
     if (mapSelectedNodeIdx >= 0 && mapSelectedNodeIdx < nodes.length) {
+      pushUndo();
       nodes[mapSelectedNodeIdx].mapX = Math.round(mx);
       nodes[mapSelectedNodeIdx].mapY = Math.round(my);
+      if (nodes[mapSelectedNodeIdx].floorId === null) nodes[mapSelectedNodeIdx].floorId = mapCurrentFloorId;
       buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor();
       saveRoutes();
       // Auto-advance to next unplaced
@@ -1759,11 +1965,13 @@ document.getElementById('floorplanInput').addEventListener('change', e => {
   reader.onload = ev => {
     const image = new Image();
     image.onload = () => {
-      route.floorplan = image;
-      floorplanImg = image;
-      document.getElementById('btnClearFloorplan').style.display = 'flex';
-      if (mapEditorOpen) drawMapEditor();
-      saveRoutes();
+      const floor = (route.floors || []).find(f => f.id === mapCurrentFloorId);
+      if (floor) {
+        floor.image = image;
+        document.getElementById('btnClearFloorplan').style.display = 'flex';
+        if (mapEditorOpen) drawMapEditor();
+        saveRoutes();
+      }
     };
     image.src = ev.target.result;
   };
@@ -1772,10 +1980,20 @@ document.getElementById('floorplanInput').addEventListener('change', e => {
 });
 function clearFloorplan() {
   const route = currentRoute(); if (!route) return;
-  route.floorplan = null; floorplanImg = null;
+  const floor = (route.floors || []).find(f => f.id === mapCurrentFloorId);
+  if (floor) floor.image = null;
   document.getElementById('btnClearFloorplan').style.display = 'none';
   if (mapEditorOpen) drawMapEditor();
+  saveRoutes();
 }
+
+// Undo / Redo keyboard shortcut
+document.addEventListener('keydown', e => {
+  if (!mapEditorOpen) return;
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+  if (e.ctrlKey && !e.shiftKey && e.key === 'z') { e.preventDefault(); mapUndo(); }
+  if (e.ctrlKey && (e.key === 'y' || (e.shiftKey && e.key === 'z'))) { e.preventDefault(); mapRedo(); }
+});
 
 // ══════════════════════════════════════════════════
 // INPUT CONTROLS
@@ -1951,7 +2169,7 @@ const demoNodes = [
 
 function loadDemo() {
   document.getElementById('welcome').classList.add('hidden');
-  const route={id:'DEMO',name:'Demo Facility Tour',desc:'Sample walkthrough',nodes:[],floorplan:null};
+  const route={id:'DEMO',name:'Demo Facility Tour',desc:'Sample walkthrough',nodes:[],floors:[{id:'F0',name:'Floor 1',image:null}]};
   routes.push(route);
   rebuildRouteSelect();
   currentRouteIdx=0;
@@ -1962,7 +2180,7 @@ function loadDemo() {
     const dataUrl=makeSyntheticPanorama(nd.colors,nd.name);
     const image=new Image();
     image.onload=()=>{
-      route.nodes.push({id:'N'+String(i+1).padStart(2,'0'),name:nd.name,desc:nd.desc,image,mapX:nd.mapX,mapY:nd.mapY,hotspots:[]});
+      route.nodes.push({id:'N'+String(i+1).padStart(2,'0'),name:nd.name,desc:nd.desc,image,mapX:nd.mapX,mapY:nd.mapY,floorId:null,hotspots:[]});
       loaded++;
       if(loaded===demoNodes.length){buildSidebar();updateNodeCount();rebuildRouteSelect();navigateTo(0);saveRoutes();}
     };
@@ -1985,11 +2203,12 @@ function saveRoutes() {
   if (!db) return;
   const data = routes.map(r => ({
     id: r.id, name: r.name, desc: r.desc,
-    floorplan: r.floorplan ? r.floorplan.src : null,
+    floors: (r.floors || []).map(f => ({ id: f.id, name: f.name, imageSrc: f.image ? f.image.src : null })),
     nodes: r.nodes.map(n => ({
       id: n.id, name: n.name, desc: n.desc,
       imageSrc: n.image ? n.image.src : null,
       mapX: n.mapX, mapY: n.mapY,
+      floorId: n.floorId || null,
       connections: n.connections || [],
       hotspots: n.hotspots || []
     }))
@@ -2008,12 +2227,26 @@ async function loadRoutes() {
       if (!record || !record.routes || !record.routes.length) { resolve(false); return; }
       const promises = [];
       record.routes.forEach(rd => {
-        const route = { id: rd.id, name: rd.name, desc: rd.desc || '', nodes: [], floorplan: null };
-        if (rd.floorplan) {
+        const route = { id: rd.id, name: rd.name, desc: rd.desc || '', nodes: [], floors: [] };
+        if (rd.floors && rd.floors.length) {
+          // New format: reconstruct floors array
+          rd.floors.forEach(f => {
+            const fl = { id: f.id, name: f.name, image: null };
+            if (f.imageSrc) {
+              fl.image = new Image();
+              promises.push(new Promise(res => { fl.image.onload = fl.image.onerror = res; }));
+              fl.image.src = f.imageSrc;
+            }
+            route.floors.push(fl);
+          });
+        } else if (rd.floorplan) {
+          // Old format: single floorplan → migrate to floors array
           const fp = new Image();
           promises.push(new Promise(res => { fp.onload = fp.onerror = res; }));
           fp.src = rd.floorplan;
-          route.floorplan = fp;
+          route.floors.push({ id: 'F0', name: 'Floor 1', image: fp });
+        } else {
+          route.floors.push({ id: 'F0', name: 'Floor 1', image: null });
         }
         rd.nodes.forEach(nd => {
           let image = null;
@@ -2022,7 +2255,7 @@ async function loadRoutes() {
             promises.push(new Promise(res => { image.onload = image.onerror = res; }));
             image.src = nd.imageSrc;
           }
-          route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, connections: nd.connections || [], hotspots: nd.hotspots || [] });
+          route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, floorId: nd.floorId || null, connections: nd.connections || [], hotspots: nd.hotspots || [] });
         });
         routes.push(route);
       });
@@ -2048,11 +2281,12 @@ function exportRoutes() {
     exported: new Date().toISOString(),
     routes: routes.map(r => ({
       id: r.id, name: r.name, desc: r.desc,
-      floorplan: r.floorplan ? r.floorplan.src : null,
+      floors: (r.floors || []).map(f => ({ id: f.id, name: f.name, imageSrc: f.image ? f.image.src : null })),
       nodes: r.nodes.map(n => ({
         id: n.id, name: n.name, desc: n.desc,
         imageSrc: n.image ? n.image.src : null,
         mapX: n.mapX, mapY: n.mapY,
+        floorId: n.floorId || null,
         connections: n.connections || [],
         hotspots: n.hotspots || []
       }))
@@ -2076,12 +2310,25 @@ async function importRoutes(file) {
     const promises = [];
     const imported = [];
     data.routes.forEach(rd => {
-      const route = { id: 'R' + Date.now() + Math.floor(Math.random() * 1000), name: rd.name, desc: rd.desc || '', nodes: [], floorplan: null };
-      if (rd.floorplan) {
+      const route = { id: 'R' + Date.now() + Math.floor(Math.random() * 1000), name: rd.name, desc: rd.desc || '', nodes: [], floors: [] };
+      if (rd.floors && rd.floors.length) {
+        rd.floors.forEach(f => {
+          const fl = { id: f.id, name: f.name, image: null };
+          if (f.imageSrc) {
+            fl.image = new Image();
+            promises.push(new Promise(res => { fl.image.onload = fl.image.onerror = res; }));
+            fl.image.src = f.imageSrc;
+          }
+          route.floors.push(fl);
+        });
+      } else if (rd.floorplan) {
+        // Old export format
         const fp = new Image();
         promises.push(new Promise(res => { fp.onload = fp.onerror = res; }));
         fp.src = rd.floorplan;
-        route.floorplan = fp;
+        route.floors.push({ id: 'F0', name: 'Floor 1', image: fp });
+      } else {
+        route.floors.push({ id: 'F0', name: 'Floor 1', image: null });
       }
       (rd.nodes || []).forEach(nd => {
         let image = null;
@@ -2090,7 +2337,7 @@ async function importRoutes(file) {
           promises.push(new Promise(res => { image.onload = image.onerror = res; }));
           image.src = nd.imageSrc;
         }
-        route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, connections: nd.connections || [], hotspots: nd.hotspots || [] });
+        route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, floorId: nd.floorId || null, connections: nd.connections || [], hotspots: nd.hotspots || [] });
       });
       imported.push(route);
     });

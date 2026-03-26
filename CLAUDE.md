@@ -3,7 +3,7 @@
 ## Project Overview
 FacilityView is a single-file HTML/CSS/JS virtual tour simulator for facility worker training. Users upload equirectangular panorama images, link them into named routes, and navigate between them in a Google Street View-style viewer.
 
-**The entire app lives in one file:** `virtual-tour.html` (~2,450 lines)
+**The entire app lives in one file:** `virtual-tour.html` (~2,600 lines)
 
 ---
 
@@ -11,27 +11,27 @@ FacilityView is a single-file HTML/CSS/JS virtual tour simulator for facility wo
 
 | Lines | Content |
 |---|---|
-| 1–302 | `<head>`: CSS styles |
-| 303–551 | HTML: header, sidebar, viewer, map editor overlay |
-| 552–708 | HTML: modals (add route, add node, edit node, hotspots, manage hotspots) |
-| 661–708 | `<script>` open + all JS global state declarations |
-| 722–740 | Helper functions: `currentRoute()`, `currentNodes()` |
-| 741–815 | Route management: `openNewRouteModal`, `confirmNewRoute`, `duplicateRoute`, `rebuildRouteSelect`, `selectRoute` |
-| 816–960 | Node management: `triggerAddNode`, `confirmAddNode`, `openRenameModal`, `removeNodeImage`, `confirmRenameNode`, `deleteNode`, `getThumbnail`, `buildSidebar`, `reorderNode` |
-| 1039–1115 | Navigation: `navigateTo`, `navigatePrev/Next`, `updateHeaders`, `updateRouteProgress` |
-| 1111–1200 | Canvas/rendering utils: `resizeCanvas`, `clearViewer`, `renderFrame`, `scheduleRender`, `updateHUD` |
-| 1203–1310 | Hotspot DOM: `buildHotspots`, `updateHotspotPositions` |
-| 1303–1430 | Minimap: `toggleMinimapMinimize`, `drawMinimap` |
-| 1430–1755 | Map editor: `openMapEditor`, `closeMapEditor`, `setTool`, `buildEditorNodeList`, `drawMapEditor`, mouse/click handlers |
-| 1755–1890 | Floorplan upload: `clearFloorplan` |
-| 1889–1903 | View controls: `adjustFov`, `resetView`, `toggleFullscreen`, `openModal`, `closeModal` |
-| 1913–1975 | Demo panoramas: `makeSyntheticPanorama`, `loadDemo` |
-| 1976–2043 | IndexedDB: `openDB`, `saveRoutes`, `loadRoutes`, `flashSavedIndicator` |
-| 2044–2117 | Export/Import: `exportRoutes`, `importRoutes` |
-| 2118–2150 | Settings & inertia: `toggleSettings`, `updateSensitivity`, `startInertia` |
-| 2151–2330 | Custom hotspot CRUD: `toggleHotspotEditMode`, `canvasClickToYawPitch`, `openAddHotspotModal`, `confirmAddHotspot`, `deleteHotspot`, `openManageHotspotsModal`, `buildHotspotManageList`, `openEditHotspotModal`, `startRepositionHotspot`, `showHotspotInfo` |
-| 2329–2428 | WebGL init: `initWebGL` (shaders, texture setup, fallback) |
-| 2428–2453 | App init: `showLoader`, `hideLoader`, `init` |
+| 1–320 | `<head>`: CSS styles (incl. floor tabs) |
+| 320–570 | HTML: header, sidebar, viewer, map editor overlay (incl. floor tabs bar) |
+| 570–730 | HTML: modals (add route, add node, edit node, hotspots, manage hotspots) |
+| 675–730 | `<script>` open + all JS global state declarations |
+| 740–755 | Helper functions: `currentRoute()`, `currentNodes()` |
+| 755–815 | Route management: `openNewRouteModal`, `confirmNewRoute`, `duplicateRoute`, `rebuildRouteSelect`, `selectRoute` |
+| 816–970 | Node management: `triggerAddNode`, `confirmAddNode`, `openRenameModal`, `removeNodeImage`, `confirmRenameNode`, `deleteNode`, `getThumbnail`, `buildSidebar`, `reorderNode` |
+| 1050–1130 | Navigation: `navigateTo`, `navigatePrev/Next`, `updateHeaders`, `updateRouteProgress` |
+| 1130–1220 | Canvas/rendering utils: `resizeCanvas`, `clearViewer`, `renderFrame`, `scheduleRender`, `updateHUD` |
+| 1220–1330 | Hotspot DOM: `buildHotspots`, `updateHotspotPositions` |
+| 1330–1470 | Minimap: `toggleMinimapMinimize`, `drawMinimap` |
+| 1470–1830 | Map editor: `openMapEditor`, `closeMapEditor`, undo/redo helpers, `setTool`, `buildEditorNodeList`, floor tab functions, `drawMapEditor`, mouse/click handlers |
+| 1830–1920 | Floorplan upload: `clearFloorplan`, undo/redo keyboard listener |
+| 1920–1940 | View controls: `adjustFov`, `resetView`, `toggleFullscreen`, `openModal`, `closeModal` |
+| 1950–2010 | Demo panoramas: `makeSyntheticPanorama`, `loadDemo` |
+| 2010–2090 | IndexedDB: `openDB`, `saveRoutes`, `loadRoutes`, `flashSavedIndicator` |
+| 2090–2180 | Export/Import: `exportRoutes`, `importRoutes` |
+| 2180–2210 | Settings & inertia: `toggleSettings`, `updateSensitivity`, `startInertia` |
+| 2210–2400 | Custom hotspot CRUD: `toggleHotspotEditMode`, `canvasClickToYawPitch`, `openAddHotspotModal`, `confirmAddHotspot`, `deleteHotspot`, `openManageHotspotsModal`, `buildHotspotManageList`, `openEditHotspotModal`, `startRepositionHotspot`, `showHotspotInfo` |
+| 2400–2510 | WebGL init: `initWebGL` (shaders, texture setup, fallback) |
+| 2510–2540 | App init: `showLoader`, `hideLoader`, `init` |
 
 ---
 
@@ -57,19 +57,21 @@ FacilityView is a single-file HTML/CSS/JS virtual tour simulator for facility wo
 ```js
 routes[] = [{
   id, name, desc,
-  floorplan: Image | null,
+  floors: [{ id, name, image: Image | null }],  // array of floors; at least one always present
   nodes: [{
     id,              // e.g. "N01" — reassigned after reorder/delete
     name, desc,
     image: Image | null,  // panorama; null = not yet assigned
     thumbUrl,        // lazy-generated 96×60 thumbnail data URL (null if no image)
     mapX, mapY,      // 2D map position (null if unplaced)
-    connections: [], // array of node IDs for explicit (non-linear) nav links
+    floorId,         // string floor ID (null = unassigned)
+    connections: [], // array of node IDs for explicit (non-linear) nav links — cross-floor allowed
     hotspots: [{ id, type: 'info'|'link', yaw, pitch, label, content }]
   }]
 }]
 ```
-- `connections[]` — set via Map Editor "Connect" tool. `buildHotspots()` always shows linear prev/next AND adds connection arrows for any target not already covered.
+- `floors[]` — replaces old `floorplan` field. At least one floor always exists. Serialized as `imageSrc` in IndexedDB/export. Old saves (with `floorplan`) are migrated in `loadRoutes()`.
+- `connections[]` — set via Map Editor "Connect" tool. Cross-floor connections are supported; shown as `↕` badge in map editor instead of a line. `buildHotspots()` shows nav arrows for all connections regardless of floor.
 - `image` may be `null` — nodes can be created name-only; panorama added later via Edit Node modal.
 
 ### Persistence
@@ -91,7 +93,7 @@ routes[] = [{
 | `navigateTo(index)` | Switch nodes — handles crossfade, arrival yaw, hotspot rebuild |
 | `buildHotspots(index)` | Create nav arrows (linear + explicit connections) + custom hotspot DOM |
 | `updateHotspotPositions()` | Reposition hotspot overlays each frame via yaw/pitch math |
-| `drawMinimap()` | Render 2D position map; `toMM(nx,ny)` maps coords to canvas px |
+| `drawMinimap()` | Render 2D position map; `toMM(nx,ny)` maps coords to canvas px; floor-aware (shows active node's floor) |
 | `toggleMinimapMinimize()` | Toggle ▼/▲ collapse of minimap canvas |
 | `resizeCanvas()` | Sync canvas pixel dimensions to layout size |
 | `saveRoutes()` | Serialize routes[] → IndexedDB |
@@ -113,10 +115,21 @@ routes[] = [{
 | `openEditHotspotModal(hsId)` | Edit existing hotspot label/type/content |
 | `startRepositionHotspot(hsId)` | Enter reposition mode — next canvas click sets new yaw/pitch |
 | `startInertia()` | rAF loop that decays velX/velY at 0.88/frame |
-| `drawMapEditor()` | Render full-screen map editor canvas |
-| `buildEditorNodeList()` | Rebuild node list panel inside map editor |
+| `drawMapEditor()` | Render full-screen map editor canvas; floor-aware background + node dimming + cross-floor badges |
+| `buildEditorNodeList()` | Rebuild node list panel inside map editor (shows floor name per node) |
 | `setTool(tool)` | Switch map editor tool: `'place'` \| `'move'` \| `'connect'` |
-| `duplicateRoute()` | Copy route with new ID; shares Image/thumbUrl object references |
+| `buildFloorTabs()` | Rebuild floor tabs bar from `route.floors`; click→switch, dblclick→rename, ✕→delete |
+| `switchFloor(floorId)` | Set `mapCurrentFloorId`, rebuild tabs, redraw |
+| `addFloor()` | Prompt name, push new floor, switchFloor, saveRoutes |
+| `deleteFloor(floorId)` | Guard (min 1 floor), unassign nodes, remove floor, rebuild |
+| `startFloorRename(floorId, nameEl)` | Inline input replace for floor tab rename |
+| `assignNodeFloor(nodeIdx, floorId)` | Set `node.floorId`, redraw, save |
+| `mapSnapshot()` | Capture node positions+connections for undo |
+| `applySnapshot(snap)` | Restore positions+connections from snapshot (matches by node ID) |
+| `pushUndo()` | Push snapshot to undoStack (cap 50), clear redoStack |
+| `mapUndo()` | Pop undoStack, restore, push to redoStack, redraw+save |
+| `mapRedo()` | Pop redoStack, restore, push to undoStack, redraw+save |
+| `duplicateRoute()` | Copy route with new ID; shares Image/thumbUrl object references; copies floors[] |
 | `showLoader(msg)` / `hideLoader()` | Show/hide full-screen loading overlay |
 | `init()` | App entry point: openDB → loadRoutes → loadDemo (if empty) |
 
@@ -149,8 +162,10 @@ mapSelectedNodeIdx      // selected node in editor (-1 = none)
 mapDraggingNodeIdx      // node being dragged in editor (-1 = none)
 mapConnectFirstNodeIdx  // first node clicked in connect tool (-1 = none)
 mapDragOffX, mapDragOffY // drag offset within node circle
-floorplanImg            // optional background Image for map editor
+mapCurrentFloorId       // string ID of floor being viewed/edited (null = none)
 mapEditorOpen           // true when map editor overlay is visible
+mapUndoStack            // array of position/connection snapshots (capped at 50)
+mapRedoStack            // array of redoable snapshots
 
 // Hotspot editing
 hotspotEditMode         // true when placing a new hotspot (crosshair cursor)
@@ -228,6 +243,10 @@ header
 - **Non-POT textures** — WebGL 1 requires `CLAMP_TO_EDGE` for non-power-of-2 textures.
 - **Touch tap detection** — `mouseDownX/Y` must be set in both `mousedown` and `touchstart` handlers or tap detection breaks on mobile.
 - **`image` can be null** — nodes may have no panorama. Always guard with `if (node.image)` before accessing `.src` or `.naturalWidth`.
+- **`floorId` can be null** — unassigned nodes show on all floor tabs in the editor and on all floor views in the minimap. Always use `node.floorId || null` when reading.
+- **Undo stack covers only map positions/connections** — does NOT undo node add/delete. Stacks reset when the map editor opens or closes.
+- **Cross-floor connections are stored in `connections[]`** — no special handling needed in `buildHotspots()`. In `drawMapEditor()`, same-floor connections draw lines; cross-floor connections draw a `↕` badge on both endpoints.
+- **`route.floors` always has at least one entry** — `openMapEditor()` defensively adds the default if missing (handles old saves).
 
 ---
 
@@ -257,6 +276,8 @@ header
 - Minimap orientation matches map editor (Y-down, consistent)
 - Optional panorama on node creation (name-only nodes supported)
 - Change / remove panorama via Edit Node modal
+- Undo / redo in map editor (Ctrl+Z / Ctrl+Y) — node placement, movement, connections
+- Multi-floor support — floor tabs in map editor, per-node floor assignment, cross-floor connections, floor-aware minimap
 
 ## Roadmap (as of 2026-03-26)
 
@@ -264,7 +285,7 @@ header
 2. Training session log — record which nodes were visited, timestamps, quiz scores
 3. Custom hotspot icons — choose icon/color per hotspot instead of default pin
 4. Hotspot links to external URLs — open browser tab from a link-type hotspot
-5. Undo / redo in map editor — Ctrl+Z / Ctrl+Y for node placement and connection changes
+5. ~~Undo / redo in map editor~~ ✓ Done
 6. Kiosk / presentation mode — full-screen, hide all editing UI, auto-advance option
-7. Multi-floor support — stack multiple floorplans per route with floor-switcher UI
+7. ~~Multi-floor support~~ ✓ Done
 8. Export Viewer Package — generate a self-contained viewer-only `viewer.html` with all editing UI stripped, route data baked in, for distribution to end users
