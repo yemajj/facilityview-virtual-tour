@@ -21,7 +21,7 @@ FacilityView is a single-file HTML/CSS/JS virtual tour simulator for facility wo
 - **Yaw**: radians, `0 = north/forward`. Increases clockwise (drag right = yaw increases).
 - **Pitch**: radians, `0 = horizon`, clamped to `±Math.PI/2.2`.
 - **FOV**: degrees, default 75.
-- **Minimap**: north = up. Y-axis flipped: larger stored `mapY` = further north on screen.
+- **Minimap**: Y-down (matches canvas/map editor). Larger stored `mapY` = further south on screen. Orientation is consistent with the map editor.
 - **Bearing formula** (current→target): `Math.atan2(target.mapX - current.mapX, target.mapY - current.mapY)`
 
 ### Data Model

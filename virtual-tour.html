@@ -1279,11 +1279,11 @@ function drawMinimap() {
     const scale = Math.min(scaleX, scaleY, 3.5); // cap zoom
     scaleX = scale; scaleY = scale;
     offX = pad - minX * scale + ((W - pad*2) - rangeX*scale) / 2;
-    // Y is flipped so north (larger stored Y) appears at top of minimap
-    offY = pad + maxY * scale + ((H - pad*2) - rangeY*scale) / 2;
+    // Y matches canvas Y-down so orientation is consistent with the map editor
+    offY = pad - minY * scale + ((H - pad*2) - rangeY*scale) / 2;
   }
 
-  function toMM(nx, ny) { return [nx * scaleX + offX, -ny * scaleY + offY]; }
+  function toMM(nx, ny) { return [nx * scaleX + offX, ny * scaleY + offY]; }
 
   // Draw sequential order lines (faint)
   for (let i = 0; i < nodes.length - 1; i++) {
