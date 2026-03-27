@@ -1502,8 +1502,16 @@ function drawMinimap() {
   const nodes = allNodes.filter(n => n.floorId === activeFloorId || n.floorId === null);
   if (!nodes.length) return;
 
-  // Compute bounds to auto-fit placed nodes
-  const placed = nodes.filter(n => n.mapX !== null);
+  // Ghost nodes: cross-floor nodes connected to any active-floor node (shown dimmed so
+  // users can see which direction to look when navigating between floors)
+  const ghostNodes = allNodes.filter(n => {
+    if (nodes.includes(n)) return false;
+    if (n.mapX === null) return false;
+    return nodes.some(fn => fn.connections && fn.connections.includes(n.id));
+  });
+
+  // Compute bounds to auto-fit placed nodes (include ghost nodes so they stay in frame)
+  const placed = [...nodes, ...ghostNodes].filter(n => n.mapX !== null);
   let scaleX = 1, scaleY = 1, offX = 0, offY = 0;
   if (placed.length >= 1) {
     const xs = placed.map(n => n.mapX), ys = placed.map(n => n.mapY);
@@ -1535,6 +1543,28 @@ function drawMinimap() {
       mctx.lineWidth = 1.5;
       mctx.beginPath(); mctx.moveTo(ax, ay); mctx.lineTo(bx, by); mctx.stroke();
     });
+  });
+
+  // Draw ghost nodes (cross-floor connections) — dimmed so active-floor nodes draw on top
+  ghostNodes.forEach(node => {
+    const [x, y] = toMM(node.mapX, node.mapY);
+    mctx.globalAlpha = 0.35;
+    mctx.beginPath(); mctx.arc(x, y, 3, 0, Math.PI*2);
+    mctx.fillStyle = 'rgba(0,200,255,0.6)';
+    mctx.fill();
+    mctx.strokeStyle = 'rgba(0,200,255,0.5)';
+    mctx.lineWidth = 1; mctx.stroke();
+    // ⬍ badge
+    mctx.fillStyle = 'rgba(0,200,255,0.9)';
+    mctx.font = 'bold 9px monospace';
+    mctx.textAlign = 'center'; mctx.textBaseline = 'middle';
+    mctx.fillText('⬍', x, y - 10);
+    // Node ID label
+    mctx.font = '8px monospace';
+    mctx.fillStyle = 'rgba(0,200,255,0.7)';
+    mctx.textBaseline = 'alphabetic';
+    mctx.fillText(node.id, x, y + 14);
+    mctx.globalAlpha = 1;
   });
 
   // Draw nodes
