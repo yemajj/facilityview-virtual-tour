@@ -361,6 +361,53 @@
   #kioskIntervalVal { min-width:28px; color:var(--accent); }
   #btnExitKiosk { font-family:var(--cond); font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; padding:5px 14px; background:transparent; border:1px solid var(--border); border-radius:3px; color:var(--muted); cursor:pointer; transition:all 0.15s; }
   #btnExitKiosk:hover { border-color:#ff4444; color:#ff4444; }
+
+  /* ── QUIZ OVERLAY ── */
+  #quizOverlay { display:none; position:absolute; inset:0; background:rgba(0,0,0,0.88); z-index:200; align-items:center; justify-content:center; pointer-events:all; backdrop-filter:blur(4px); }
+  #quizCard { background:var(--panel); border:1px solid var(--border); border-radius:6px; padding:28px; max-width:520px; width:90%; max-height:90vh; overflow-y:auto; box-shadow:0 4px 40px rgba(0,0,0,0.8); }
+  #quizHeader { display:flex; align-items:center; gap:10px; margin-bottom:20px; }
+  #quizBadge { font-family:var(--mono); font-size:9px; letter-spacing:3px; text-transform:uppercase; color:var(--bg); background:var(--accent); padding:3px 8px; border-radius:2px; flex-shrink:0; }
+  #quizNodeLabel { font-family:var(--mono); font-size:10px; color:var(--muted); letter-spacing:1px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  #quizQuestion { font-family:var(--sans); font-size:16px; font-weight:600; color:var(--text); line-height:1.5; margin-bottom:20px; }
+  #quizOptions { display:flex; flex-direction:column; gap:8px; margin-bottom:14px; }
+  .quiz-opt-btn { display:flex; align-items:center; gap:12px; padding:12px 14px; background:var(--bg); border:1px solid var(--border); border-radius:4px; color:var(--text); font-family:var(--sans); font-size:14px; cursor:pointer; text-align:left; transition:all 0.15s; width:100%; }
+  .quiz-opt-btn:hover:not(:disabled) { border-color:var(--accent2); background:rgba(0,200,255,0.07); }
+  .quiz-opt-btn:disabled { cursor:default; }
+  .quiz-opt-btn.quiz-opt-correct { border-color:var(--success) !important; background:rgba(0,230,118,0.12) !important; }
+  .quiz-opt-btn.quiz-opt-wrong { border-color:var(--danger) !important; background:rgba(255,68,68,0.1) !important; }
+  .quiz-opt-letter { font-family:var(--mono); font-size:11px; font-weight:700; letter-spacing:1px; width:20px; flex-shrink:0; color:var(--muted); }
+  .quiz-opt-btn.quiz-opt-correct .quiz-opt-letter { color:var(--success); }
+  .quiz-opt-btn.quiz-opt-wrong .quiz-opt-letter { color:var(--danger); }
+  .quiz-opt-text { flex:1; }
+  #quizFeedback { padding:12px 14px; border-radius:4px; font-family:var(--sans); font-size:13px; line-height:1.5; margin-bottom:14px; }
+  #quizFeedback.quiz-feedback-correct { background:rgba(0,230,118,0.1); border:1px solid rgba(0,230,118,0.3); color:#a8f5cc; }
+  #quizFeedback.quiz-feedback-wrong { background:rgba(255,68,68,0.1); border:1px solid rgba(255,68,68,0.3); color:#ffc0c0; }
+  .quiz-fb-icon { font-size:14px; margin-right:4px; }
+  #quizContinueBtn { width:100%; padding:12px; background:var(--accent); border:none; border-radius:4px; color:#000; font-family:var(--cond); font-size:14px; font-weight:700; letter-spacing:2px; text-transform:uppercase; cursor:pointer; transition:opacity 0.15s; }
+  #quizContinueBtn:hover { opacity:0.85; }
+
+  /* ── QUIZ SCORE MODAL ── */
+  .quiz-score-circle { width:80px; height:80px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-family:var(--mono); font-size:22px; font-weight:700; margin:0 auto 8px; }
+  .quiz-score-circle.pass { border:3px solid var(--success); color:var(--success); background:rgba(0,230,118,0.07); }
+  .quiz-score-circle.fail { border:3px solid var(--danger); color:var(--danger); background:rgba(255,68,68,0.07); }
+  #quizScoreSummary { text-align:center; font-family:var(--mono); font-size:11px; color:var(--muted); letter-spacing:1px; margin-bottom:20px; }
+  #quizScoreRows { max-height:260px; overflow-y:auto; padding-right:2px; }
+  .quiz-score-row { display:flex; align-items:center; gap:10px; padding:6px 8px; border-radius:3px; font-family:var(--mono); font-size:11px; }
+  .quiz-score-row:nth-child(even) { background:rgba(255,255,255,0.03); }
+  .quiz-score-node { color:var(--muted); width:36px; flex-shrink:0; }
+  .quiz-score-name { flex:1; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .quiz-score-result { flex-shrink:0; font-weight:700; }
+  .quiz-score-row.correct .quiz-score-result { color:var(--success); }
+  .quiz-score-row.wrong .quiz-score-result { color:var(--danger); }
+  .quiz-score-row.unanswered .quiz-score-result { color:var(--muted); }
+  .quiz-score-question { font-size:10px; color:var(--muted); padding:2px 8px 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+
+  /* ── QUIZ EDITOR in Edit Node modal ── */
+  .quiz-option-row { display:flex; align-items:center; gap:8px; }
+  .quiz-option-row .quiz-letter { font-family:var(--mono); font-size:10px; color:var(--muted); width:14px; flex-shrink:0; }
+  .quiz-option-row input { flex:1; background:var(--bg); border:1px solid var(--border); border-radius:3px; color:var(--text); font-family:var(--sans); font-size:12px; padding:5px 8px; outline:none; transition:border-color 0.15s; }
+  .quiz-option-row input:focus { border-color:var(--accent2); }
+
   body.kiosk-mode #btnNewRoute,
   body.kiosk-mode #btnDuplicateRoute,
   body.kiosk-mode #btnDeleteRoute,
@@ -424,6 +471,10 @@
     </button>
   </div>
   <div class="header-right">
+    <button class="btn-icon-text" id="btnQuizResults" onclick="showQuizScore()" style="display:none" title="View quiz results for this session">
+      <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
+      Results
+    </button>
     <button class="btn-icon-text" id="btnKiosk" onclick="enterKioskMode()" title="Kiosk / presentation mode — hides editing UI">
       <svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>
       Kiosk
@@ -598,6 +649,21 @@
       <div id="lightboxTitle"></div>
       <button id="lightboxClose" onclick="closeLightbox()">✕</button>
     </div>
+
+    <!-- QUIZ OVERLAY -->
+    <div id="quizOverlay">
+      <div id="quizCard">
+        <div id="quizHeader">
+          <div id="quizBadge">QUIZ</div>
+          <div id="quizNodeLabel"></div>
+        </div>
+        <div id="quizQuestion"></div>
+        <div id="quizOptions"></div>
+        <div id="quizFeedback" style="display:none"></div>
+        <button id="quizContinueBtn" onclick="closeQuizOverlay()" style="display:none">Continue →</button>
+      </div>
+    </div>
+
     <div class="flash" id="flash"></div>
   </div>
 </div>
@@ -748,6 +814,31 @@
         <button class="modal-btn-ok" style="padding:5px 12px;font-size:10px;" onclick="addConnectionFromModal()">Add</button>
       </div>
     </div>
+    <div class="modal-field">
+      <label style="display:flex;align-items:center;justify-content:space-between;">
+        <span>Quiz Question</span>
+        <span id="quizToggleLabel" onclick="toggleQuizEditor()" style="cursor:pointer;font-family:var(--mono);font-size:9px;letter-spacing:0.5px;color:var(--accent2);">+ Add Question</span>
+      </label>
+      <div id="quizEditorContent" style="display:none;margin-top:8px;flex-direction:column;gap:8px;">
+        <textarea id="quizQText" placeholder="Question text..." maxlength="300" style="width:100%;box-sizing:border-box;min-height:56px;resize:vertical;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--sans);font-size:13px;padding:8px 10px;border-radius:3px;outline:none;transition:border-color 0.15s;"></textarea>
+        <div style="display:flex;flex-direction:column;gap:5px;">
+          <div class="quiz-option-row"><span class="quiz-letter">A</span><input type="text" id="quizOpt0" placeholder="Option A…" maxlength="120"></div>
+          <div class="quiz-option-row"><span class="quiz-letter">B</span><input type="text" id="quizOpt1" placeholder="Option B…" maxlength="120"></div>
+          <div class="quiz-option-row"><span class="quiz-letter">C</span><input type="text" id="quizOpt2" placeholder="Option C…" maxlength="120"></div>
+          <div class="quiz-option-row"><span class="quiz-letter">D</span><input type="text" id="quizOpt3" placeholder="Option D…" maxlength="120"></div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <span style="font-family:var(--mono);font-size:10px;color:var(--muted);white-space:nowrap;">Correct answer:</span>
+          <select id="quizCorrectSelect" style="background:var(--bg);border:1px solid var(--border);color:var(--text);padding:4px 8px;font-family:var(--mono);font-size:11px;border-radius:2px;">
+            <option value="0">A</option>
+            <option value="1">B</option>
+            <option value="2">C</option>
+            <option value="3">D</option>
+          </select>
+        </div>
+        <input type="text" id="quizExplText" placeholder="Explanation shown after answering (optional)…" maxlength="300" style="width:100%;box-sizing:border-box;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--sans);font-size:12px;padding:6px 10px;border-radius:3px;outline:none;transition:border-color 0.15s;">
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="modal-btn-cancel" onclick="closeModal('modalRenameNode')">Cancel</button>
       <button class="modal-btn-ok" onclick="confirmRenameNode()">Save</button>
@@ -855,6 +946,22 @@
   </div>
 </div>
 
+<div class="modal-bg" id="modalQuizScore">
+  <div class="modal" style="min-width:340px;max-width:460px;width:90%">
+    <div class="modal-title">Quiz Results</div>
+    <div class="modal-sub" id="quizScoreRoute">—</div>
+    <div style="padding:16px 0 0;">
+      <div class="quiz-score-circle" id="quizScoreCircle">—%</div>
+      <div id="quizScoreSummary">—</div>
+      <div id="quizScoreRows"></div>
+    </div>
+    <div class="modal-actions">
+      <button class="modal-btn-cancel" onclick="closeModal('modalQuizScore')">Close</button>
+      <button class="modal-btn-ok" onclick="resetQuizSession();closeModal('modalQuizScore')">Retake</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════
 // STATE
@@ -897,6 +1004,10 @@ let kioskAuto       = false;
 let kioskIntervalSec = 10;
 let kioskTimerId    = null;
 let kioskElapsed    = 0;          // ms elapsed in current countdown
+
+// Quiz session state
+let quizAnswered = {};         // nodeId → { selectedIdx, correct, correctIdx }
+let quizResultsShown = false;  // prevent auto-showing score modal more than once per session
 
 // Settings & inertia
 let sensitivityLevel = 3;         // 1–10 slider value
@@ -1004,7 +1115,9 @@ function duplicateRoute() {
       mapX: n.mapX, mapY: n.mapY,
       floorId: n.floorId || null,
       connections: [...(n.connections || [])],
-      hotspots: (n.hotspots || []).map(h => ({ ...h }))
+      hotspots: (n.hotspots || []).map(h => ({ ...h })),
+      navArrowColor: n.navArrowColor || null,
+      quiz: n.quiz ? { ...n.quiz, options: [...n.quiz.options] } : null
     }))
   };
   routes.push(copy);
@@ -1055,6 +1168,9 @@ document.getElementById('routeSelect').addEventListener('change', function() {
 });
 function selectRoute(idx) {
   currentRouteIdx = idx; currentNodeIdx = -1; img = null;
+  // Reset quiz session for new route
+  quizAnswered = {}; quizResultsShown = false;
+  document.getElementById('btnQuizResults').style.display = 'none';
   const route = currentRoute();
   document.getElementById('sidebarRouteBadge').textContent = route ? route.name : 'NO ROUTE';
   document.getElementById('routeSelect').value = idx;
@@ -1112,7 +1228,8 @@ function confirmAddNode() {
     floorId: null,
     connections: [],
     hotspots: [],
-    navArrowColor: null
+    navArrowColor: null,
+    quiz: null
   };
   // Auto-connect new node to the previous node (bidirectional) so linear nav works
   // by default — users can break this link via the Connect tool in the map editor
@@ -1137,6 +1254,26 @@ function openRenameModal(nodeIdx) {
   document.getElementById('renameNodeImageLabel').textContent = node.image ? 'Image attached — click to replace' : 'No image — click to add';
   document.getElementById('btnRemoveNodeImage').style.display = node.image ? '' : 'none';
   document.getElementById('navArrowColorInput').value = node.navArrowColor || '#f0a500';
+  // Populate quiz section
+  const quizContent = document.getElementById('quizEditorContent');
+  const quizToggle  = document.getElementById('quizToggleLabel');
+  if (node.quiz) {
+    quizContent.style.display = 'flex';
+    quizToggle.textContent = '− Remove';
+    document.getElementById('quizQText').value = node.quiz.question || '';
+    ['quizOpt0','quizOpt1','quizOpt2','quizOpt3'].forEach((id, i) => {
+      document.getElementById(id).value = node.quiz.options[i] || '';
+    });
+    document.getElementById('quizCorrectSelect').value = node.quiz.correctIndex ?? 0;
+    document.getElementById('quizExplText').value = node.quiz.explanation || '';
+  } else {
+    quizContent.style.display = 'none';
+    quizToggle.textContent = '+ Add Question';
+    document.getElementById('quizQText').value = '';
+    ['quizOpt0','quizOpt1','quizOpt2','quizOpt3'].forEach(id => document.getElementById(id).value = '');
+    document.getElementById('quizCorrectSelect').value = '0';
+    document.getElementById('quizExplText').value = '';
+  }
   refreshModalConnections();
   openModal('modalRenameNode');
   setTimeout(() => document.getElementById('renameNodeName').focus(), 100);
@@ -1257,6 +1394,23 @@ function confirmRenameNode() {
   node.desc = document.getElementById('renameNodeDesc').value.trim();
   const pickedColor = document.getElementById('navArrowColorInput').value;
   node.navArrowColor = (pickedColor && pickedColor.toLowerCase() !== '#f0a500') ? pickedColor : null;
+  // Save quiz (only if editor is open and question + all options filled)
+  if (document.getElementById('quizEditorContent').style.display !== 'none') {
+    const qText = document.getElementById('quizQText').value.trim();
+    const opts   = [0,1,2,3].map(i => document.getElementById('quizOpt'+i).value.trim());
+    if (qText && opts.every(o => o)) {
+      node.quiz = {
+        question: qText,
+        options: opts,
+        correctIndex: parseInt(document.getElementById('quizCorrectSelect').value) || 0,
+        explanation: document.getElementById('quizExplText').value.trim()
+      };
+    } else {
+      node.quiz = null;
+    }
+  } else {
+    node.quiz = null;
+  }
   closeModal('modalRenameNode');
   buildSidebar(); drawMinimap();
   if (renameTargetIdx === currentNodeIdx) { updateHeaders(node, renameTargetIdx); buildHotspots(renameTargetIdx); }
@@ -1441,9 +1595,11 @@ function navigateTo(index) {
     fadeTimeout = setTimeout(() => {
       isFading = false; fadeTimeout = null;
       hotspotsEl.style.opacity = '1';
+      checkNodeQuiz(index);
     }, 360);
   } else {
     hotspotsEl.style.opacity = '1';
+    checkNodeQuiz(index);
   }
 }
 function navigatePrev() { if (currentNodeIdx > 0) navigateTo(currentNodeIdx - 1); }
@@ -2649,7 +2805,9 @@ function saveRoutes() {
       mapX: n.mapX, mapY: n.mapY,
       floorId: n.floorId || null,
       connections: n.connections || [],
-      hotspots: n.hotspots || []
+      hotspots: n.hotspots || [],
+      navArrowColor: n.navArrowColor || null,
+      quiz: n.quiz || null
     }))
   }));
   const tx = db.transaction('tours', 'readwrite');
@@ -2694,7 +2852,7 @@ async function loadRoutes() {
             promises.push(new Promise(res => { image.onload = image.onerror = res; }));
             image.src = nd.imageSrc;
           }
-          route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, floorId: nd.floorId || null, connections: nd.connections || [], hotspots: nd.hotspots || [] });
+          route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, floorId: nd.floorId || null, connections: nd.connections || [], hotspots: nd.hotspots || [], navArrowColor: nd.navArrowColor || null, quiz: nd.quiz || null });
         });
         // Migration: if every node has empty connections[], this is a pre-v2 save
         // — auto-populate sequential bidirectional connections to preserve nav behavior
@@ -2737,6 +2895,7 @@ function serializeRoutesForExport() {
         connections: n.connections || [],
         hotspots: n.hotspots || [],
         navArrowColor: n.navArrowColor || null,
+        quiz: n.quiz || null,
         thumbUrl: null  // omit thumbnails — regenerated on demand
       }))
     }))
@@ -2762,7 +2921,7 @@ async function loadFromBaked(data) {
         promises.push(new Promise(res => { image.onload = image.onerror = res; }));
         image.src = nd.imageSrc;
       }
-      route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, floorId: nd.floorId || null, connections: nd.connections || [], hotspots: nd.hotspots || [], navArrowColor: nd.navArrowColor || null, thumbUrl: null });
+      route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, floorId: nd.floorId || null, connections: nd.connections || [], hotspots: nd.hotspots || [], navArrowColor: nd.navArrowColor || null, quiz: nd.quiz || null, thumbUrl: null });
     });
     routes.push(route);
   });
@@ -2844,7 +3003,7 @@ async function importRoutes(file) {
           promises.push(new Promise(res => { image.onload = image.onerror = res; }));
           image.src = nd.imageSrc;
         }
-        route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, floorId: nd.floorId || null, connections: nd.connections || [], hotspots: nd.hotspots || [] });
+        route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, floorId: nd.floorId || null, connections: nd.connections || [], hotspots: nd.hotspots || [], navArrowColor: nd.navArrowColor || null, quiz: nd.quiz || null });
       });
       // Migration: if every node has empty connections[], this is a pre-v2 export — auto-populate sequential connections
       const allEmpty = route.nodes.every(n => !n.connections || n.connections.length === 0);
@@ -2967,6 +3126,154 @@ function stopKioskTimer() {
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape' && kioskActive) exitKioskMode();
 });
+
+// ══════════════════════════════════════════════════
+// QUIZ / ASSESSMENT MODE
+// ══════════════════════════════════════════════════
+function checkNodeQuiz(index) {
+  const nodes = currentNodes();
+  const node  = nodes[index];
+  const isLast = index === nodes.length - 1;
+
+  if (!node || !node.quiz) {
+    // No quiz on this node — if at last node with unshown results, show score
+    if (isLast && Object.keys(quizAnswered).length > 0 && !quizResultsShown) {
+      quizResultsShown = true;
+      setTimeout(() => showQuizScore(), 600);
+    }
+    return;
+  }
+  // Quiz already answered this session — skip re-showing
+  if (quizAnswered[node.id]) {
+    if (isLast && !quizResultsShown) {
+      quizResultsShown = true;
+      setTimeout(() => showQuizScore(), 600);
+    }
+    return;
+  }
+  showQuizQuestion(node);
+}
+
+function showQuizQuestion(node) {
+  const q = node.quiz;
+  document.getElementById('quizNodeLabel').textContent = node.name;
+  document.getElementById('quizQuestion').textContent  = q.question;
+  const optsEl = document.getElementById('quizOptions');
+  optsEl.innerHTML = '';
+  const letters = ['A','B','C','D'];
+  q.options.forEach((opt, i) => {
+    const btn = document.createElement('button');
+    btn.className = 'quiz-opt-btn';
+    btn.innerHTML = `<span class="quiz-opt-letter">${letters[i]}</span><span class="quiz-opt-text">${opt}</span>`;
+    btn.addEventListener('click', () => submitQuizAnswer(node, i));
+    optsEl.appendChild(btn);
+  });
+  const fb = document.getElementById('quizFeedback');
+  fb.style.display = 'none';
+  fb.className = '';
+  document.getElementById('quizContinueBtn').style.display = 'none';
+  document.getElementById('quizOverlay').style.display = 'flex';
+}
+
+function submitQuizAnswer(node, selectedIdx) {
+  const q = node.quiz;
+  const correct = selectedIdx === q.correctIndex;
+  quizAnswered[node.id] = { selectedIdx, correct, correctIdx: q.correctIndex };
+
+  // Disable all buttons and highlight correct / wrong
+  const btns = document.querySelectorAll('.quiz-opt-btn');
+  btns.forEach((btn, i) => {
+    btn.disabled = true;
+    if (i === q.correctIndex) btn.classList.add('quiz-opt-correct');
+    else if (i === selectedIdx && !correct) btn.classList.add('quiz-opt-wrong');
+  });
+
+  // Show feedback
+  const letters = ['A','B','C','D'];
+  const fb = document.getElementById('quizFeedback');
+  fb.style.display = '';
+  fb.className = correct ? 'quiz-feedback-correct' : 'quiz-feedback-wrong';
+  fb.innerHTML = correct
+    ? `<span class="quiz-fb-icon">✓</span> <strong>Correct!</strong>${q.explanation ? ' ' + q.explanation : ''}`
+    : `<span class="quiz-fb-icon">✗</span> <strong>Incorrect.</strong> The correct answer was <strong>${letters[q.correctIndex]}: ${q.options[q.correctIndex]}</strong>.${q.explanation ? ' ' + q.explanation : ''}`;
+
+  document.getElementById('quizContinueBtn').style.display = '';
+
+  // Show Results button in header
+  document.getElementById('btnQuizResults').style.display = '';
+}
+
+function closeQuizOverlay() {
+  document.getElementById('quizOverlay').style.display = 'none';
+  // Show score if at last node and results not yet shown
+  const nodes = currentNodes();
+  if (currentNodeIdx === nodes.length - 1 && !quizResultsShown) {
+    quizResultsShown = true;
+    setTimeout(() => showQuizScore(), 400);
+  }
+}
+
+function showQuizScore() {
+  const nodes = currentNodes();
+  const route = currentRoute();
+  const quizNodes = nodes.filter(n => n.quiz);
+  const answered  = Object.keys(quizAnswered).length;
+  if (!answered && !quizNodes.length) return;
+
+  const correct = Object.values(quizAnswered).filter(a => a.correct).length;
+  const total   = quizNodes.length;
+  const pct     = total > 0 ? Math.round((correct / total) * 100) : 0;
+  const letters = ['A','B','C','D'];
+
+  let rows = '';
+  quizNodes.forEach(n => {
+    const ans = quizAnswered[n.id];
+    if (!ans) {
+      rows += `<div class="quiz-score-row unanswered"><span class="quiz-score-node">${n.id}</span><span class="quiz-score-name">${n.name}</span><span class="quiz-score-result">—</span></div>`;
+    } else {
+      rows += `<div class="quiz-score-row ${ans.correct ? 'correct' : 'wrong'}">
+        <span class="quiz-score-node">${n.id}</span>
+        <span class="quiz-score-name">${n.name}</span>
+        <span class="quiz-score-result">${ans.correct ? '✓' : '✗'} ${letters[ans.selectedIdx]}</span>
+      </div>
+      <div class="quiz-score-question">${n.quiz.question}</div>`;
+    }
+  });
+
+  const circle = document.getElementById('quizScoreCircle');
+  circle.textContent = pct + '%';
+  circle.className   = 'quiz-score-circle ' + (pct >= 80 ? 'pass' : 'fail');
+  document.getElementById('quizScoreSummary').textContent = `${correct} / ${total} correct${answered < total ? ` (${total - answered} unanswered)` : ''}`;
+  document.getElementById('quizScoreRoute').textContent  = route ? route.name : '';
+  document.getElementById('quizScoreRows').innerHTML = rows;
+  openModal('modalQuizScore');
+}
+
+function resetQuizSession() {
+  quizAnswered = {};
+  quizResultsShown = false;
+  document.getElementById('btnQuizResults').style.display = 'none';
+}
+
+function toggleQuizEditor() {
+  const content = document.getElementById('quizEditorContent');
+  const toggle  = document.getElementById('quizToggleLabel');
+  const visible = content.style.display !== 'none';
+  content.style.display = visible ? 'none' : 'flex';
+  toggle.textContent = visible ? '+ Add Question' : '− Remove';
+  if (!visible) {
+    // Pre-populate from node if it already has a quiz
+    const node = currentNodes()[renameTargetIdx];
+    if (node && node.quiz) {
+      document.getElementById('quizQText').value = node.quiz.question || '';
+      ['quizOpt0','quizOpt1','quizOpt2','quizOpt3'].forEach((id, i) => {
+        document.getElementById(id).value = node.quiz.options[i] || '';
+      });
+      document.getElementById('quizCorrectSelect').value = node.quiz.correctIndex ?? 0;
+      document.getElementById('quizExplText').value = node.quiz.explanation || '';
+    }
+  }
+}
 
 // Close settings panel when clicking outside
 document.addEventListener('mousedown', e => {
