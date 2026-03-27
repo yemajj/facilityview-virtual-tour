@@ -2945,10 +2945,10 @@ async function exportViewerPackage() {
     // Get current page HTML (script content preserved as-is in outerHTML)
     let html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
 
-    // Escape </script> occurrences inside the baked JSON so the HTML parser
-    // doesn't mistake them for end-of-script (e.g. from user-typed hotspot text).
-    // JSON allows \/ as an escape for /, so <\/script> round-trips through
-    // JSON.parse correctly and is invisible to the HTML parser.
+    // Escape </ + script> in the baked JSON — the HTML parser would otherwise
+    // terminate the <script> block early if that substring appears in user data
+    // (hotspot text, node names, quiz content, etc.).
+    // JSON allows \/ as an escape for / so the values survive JSON evaluation.
     const safeJson = dataJson.replace(/<\/script>/gi, '<\\/script>');
 
     // Inject viewer mode flag and baked route data
