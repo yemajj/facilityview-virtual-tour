@@ -290,7 +290,7 @@ header
 
 1. Quiz / assessment mode — attach questions to hotspots or route end; score displayed
 2. Training session log — record which nodes were visited, timestamps, quiz scores
-3. Custom hotspot icons — choose icon/color per hotspot instead of default pin
+3. ~~Custom hotspot icons~~ ✓ Done — icon/color per hotspot + per-node nav arrow color
 4. Hotspot links to external URLs — open browser tab from a link-type hotspot
 5. ~~Undo / redo in map editor~~ ✓ Done
 6. Kiosk / presentation mode — full-screen, hide all editing UI, auto-advance option
