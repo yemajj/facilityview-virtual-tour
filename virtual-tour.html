@@ -630,6 +630,19 @@
       </div>
     </div>
     <input type="file" id="nodeImageInput" accept="image/*" style="display:none">
+    <div class="modal-field">
+      <label style="display:flex;align-items:center;justify-content:space-between;">
+        <span>Connections</span>
+        <span id="modalConnClearAll" onclick="removeAllConnectionsFromModal()" style="cursor:pointer;color:#ff6b6b;font-size:9px;letter-spacing:0.5px;text-transform:uppercase;display:none;">Clear All</span>
+      </label>
+      <div id="modalConnList" style="display:flex;flex-direction:column;gap:3px;margin-bottom:6px;max-height:120px;overflow-y:auto;"></div>
+      <div style="display:flex;gap:6px;">
+        <select id="modalConnTarget" style="flex:1;background:var(--bg);border:1px solid var(--border);color:var(--text);padding:5px 8px;font-family:var(--mono);font-size:10px;border-radius:2px;">
+          <option value="">— Select node to connect —</option>
+        </select>
+        <button class="modal-btn-ok" style="padding:5px 12px;font-size:10px;" onclick="addConnectionFromModal()">Add</button>
+      </div>
+    </div>
     <div class="modal-actions">
       <button class="modal-btn-cancel" onclick="closeModal('modalRenameNode')">Cancel</button>
       <button class="modal-btn-ok" onclick="confirmRenameNode()">Save</button>
@@ -930,8 +943,88 @@ function openRenameModal(nodeIdx) {
   document.getElementById('renameNodeSub').textContent = `Editing Node ${String(nodeIdx+1).padStart(2,'0')}`;
   document.getElementById('renameNodeImageLabel').textContent = node.image ? 'Image attached — click to replace' : 'No image — click to add';
   document.getElementById('btnRemoveNodeImage').style.display = node.image ? '' : 'none';
+  refreshModalConnections();
   openModal('modalRenameNode');
   setTimeout(() => document.getElementById('renameNodeName').focus(), 100);
+}
+function refreshModalConnections() {
+  if (renameTargetIdx < 0) return;
+  const nodes   = currentNodes();
+  const node    = nodes[renameTargetIdx]; if (!node) return;
+  const route   = currentRoute();
+  const conns   = node.connections || [];
+  const listEl  = document.getElementById('modalConnList');
+  const clearEl = document.getElementById('modalConnClearAll');
+  const selEl   = document.getElementById('modalConnTarget');
+
+  // Rebuild connection rows
+  listEl.innerHTML = conns.length ? '' : '<div style="font-family:var(--mono);font-size:9px;color:var(--muted);padding:3px 0;">No connections yet</div>';
+  conns.forEach(cid => {
+    const cn = nodes.find(n => n.id === cid); if (!cn) return;
+    const cross = cn.floorId !== node.floorId ? ' ⬍' : '';
+    const floorName = (route?.floors || []).find(f => f.id === cn.floorId)?.name || '';
+    const badge = floorName ? ` [${floorName}]` : '';
+    const row = document.createElement('div');
+    row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 7px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:2px;';
+    row.innerHTML = `<span style="flex:1;font-family:var(--mono);font-size:9px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${cn.id}: ${cn.name}${cross}<em style="opacity:.5;font-style:normal;">${badge}</em></span>` +
+      `<span onclick="removeConnectionFromModal('${cid}')" style="font-size:14px;color:var(--muted);cursor:pointer;line-height:1;flex-shrink:0;" title="Remove connection">×</span>`;
+    listEl.appendChild(row);
+  });
+  clearEl.style.display = conns.length ? '' : 'none';
+
+  // Rebuild target dropdown — only nodes not already connected and not self
+  selEl.innerHTML = '<option value="">— Select node to connect —</option>';
+  nodes.forEach((n, i) => {
+    if (i === renameTargetIdx) return;
+    if (conns.includes(n.id)) return;
+    const cross = n.floorId !== node.floorId ? ' ⬍' : '';
+    const floorName = (route?.floors || []).find(f => f.id === n.floorId)?.name || '';
+    const badge = floorName ? ` [${floorName}]` : '';
+    const opt = document.createElement('option');
+    opt.value = n.id;
+    opt.textContent = `${n.id}: ${n.name}${cross}${badge}`;
+    selEl.appendChild(opt);
+  });
+}
+function addConnectionFromModal() {
+  const targetId = document.getElementById('modalConnTarget').value; if (!targetId) return;
+  const nodes  = currentNodes();
+  const node   = nodes[renameTargetIdx]; if (!node) return;
+  const target = nodes.find(n => n.id === targetId); if (!target) return;
+  node.connections   = node.connections || [];
+  target.connections = target.connections || [];
+  if (!node.connections.includes(targetId)) node.connections.push(targetId);
+  if (!target.connections.includes(node.id)) target.connections.push(node.id);
+  refreshModalConnections();
+  if (mapEditorOpen) { buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor(); }
+  if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
+  drawMinimap(); saveRoutes();
+}
+function removeConnectionFromModal(targetId) {
+  const nodes  = currentNodes();
+  const node   = nodes[renameTargetIdx]; if (!node) return;
+  const target = nodes.find(n => n.id === targetId);
+  node.connections = (node.connections || []).filter(id => id !== targetId);
+  if (target) target.connections = (target.connections || []).filter(id => id !== node.id);
+  refreshModalConnections();
+  if (mapEditorOpen) { buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor(); }
+  if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
+  drawMinimap(); saveRoutes();
+}
+function removeAllConnectionsFromModal() {
+  const nodes = currentNodes();
+  const node  = nodes[renameTargetIdx]; if (!node) return;
+  if (!(node.connections || []).length) return;
+  if (!confirm(`Remove all ${node.connections.length} connection(s) from ${node.name}?`)) return;
+  node.connections.forEach(cid => {
+    const t = nodes.find(n => n.id === cid);
+    if (t) t.connections = (t.connections || []).filter(id => id !== node.id);
+  });
+  node.connections = [];
+  refreshModalConnections();
+  if (mapEditorOpen) { buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor(); }
+  if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
+  drawMinimap(); saveRoutes();
 }
 document.getElementById('nodeImageInput').addEventListener('change', e => {
   const file = e.target.files[0]; if (!file) return;
