@@ -208,6 +208,19 @@
   .hotspot-custom:hover .hotspot-pin { box-shadow:0 0 16px rgba(0,200,255,0.4); }
   .hotspot-pin svg { width:16px; height:16px; fill:currentColor; color:var(--accent2); }
   .hotspot-pin.link-type svg { color:var(--success); }
+  .hotspot-pin.warning-type  { background:rgba(255,170,0,0.15);  border-color:#ffaa00; }
+  .hotspot-pin.warning-type svg  { color:#ffaa00; }
+  .hotspot-pin.danger-type   { background:rgba(255,60,60,0.15);  border-color:#ff3c3c; }
+  .hotspot-pin.danger-type svg   { color:#ff3c3c; }
+  .hotspot-pin.important-type { background:rgba(255,120,0,0.15); border-color:#ff7800; }
+  .hotspot-pin.important-type svg { color:#ff7800; }
+  .hotspot-pin.note-type     { background:rgba(160,100,255,0.15);border-color:#a064ff; }
+  .hotspot-pin.note-type svg { color:#a064ff; }
+  .hs-icon-btn { width:34px;height:34px;border:2px solid var(--border);border-radius:4px;background:var(--bg-raised);cursor:pointer;display:flex;align-items:center;justify-content:center;padding:0;transition:all 0.15s;flex-shrink:0; }
+  .hs-icon-btn:hover { border-color:var(--muted); }
+  .hs-icon-btn.active { border-color:var(--accent);background:rgba(240,165,0,0.1); }
+  .hs-icon-btn svg { width:16px;height:16px;fill:var(--muted);transition:fill 0.15s; }
+  .hs-icon-btn.active svg { fill:var(--accent); }
   .hotspot-custom-label { font-family:var(--cond); font-size:9px; font-weight:700; letter-spacing:1px; color:#fff; text-transform:uppercase; background:rgba(13,15,18,0.8); padding:2px 6px; border-radius:2px; border:1px solid var(--border); white-space:nowrap; }
 
   /* HOTSPOT INFO POPUP */
@@ -631,6 +644,10 @@
     </div>
     <input type="file" id="nodeImageInput" accept="image/*" style="display:none">
     <div class="modal-field">
+      <label style="display:flex;align-items:center;justify-content:space-between;"><span>Nav Arrow Color</span><button onclick="resetNavArrowColor()" style="background:none;border:none;cursor:pointer;font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.5px;padding:0;">Reset</button></label>
+      <input type="color" id="navArrowColorInput" value="#f0a500" style="width:100%;height:32px;padding:2px 4px;border:1px solid var(--border);background:var(--bg);border-radius:3px;cursor:pointer;box-sizing:border-box;">
+    </div>
+    <div class="modal-field">
       <label style="display:flex;align-items:center;justify-content:space-between;">
         <span>Connections</span>
         <span id="modalConnClearAll" onclick="removeAllConnectionsFromModal()" style="cursor:pointer;color:#ff6b6b;font-size:9px;letter-spacing:0.5px;text-transform:uppercase;display:none;">Clear All</span>
@@ -682,6 +699,30 @@
     <div class="modal-field" id="hotspotLinkField" style="display:none">
       <label>Target Node</label>
       <select id="hotspotLinkTarget" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:var(--text);font-family:var(--sans);font-size:13px;padding:8px 10px;outline:none;"></select>
+    </div>
+    <div class="modal-field" id="hotspotIconField">
+      <label>Icon</label>
+      <div style="display:flex;gap:6px;">
+        <button class="hs-icon-btn active" data-icon="info" onclick="selectHotspotIcon('info')" title="Info">
+          <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>
+        </button>
+        <button class="hs-icon-btn" data-icon="warning" onclick="selectHotspotIcon('warning')" title="Warning">
+          <svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>
+        </button>
+        <button class="hs-icon-btn" data-icon="danger" onclick="selectHotspotIcon('danger')" title="Danger">
+          <svg viewBox="0 0 24 24"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg>
+        </button>
+        <button class="hs-icon-btn" data-icon="important" onclick="selectHotspotIcon('important')" title="Important">
+          <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>
+        </button>
+        <button class="hs-icon-btn" data-icon="note" onclick="selectHotspotIcon('note')" title="Note">
+          <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 9h-2V5h2v6zm0 4h-2v-2h2v2z"/></svg>
+        </button>
+      </div>
+    </div>
+    <div class="modal-field">
+      <label style="display:flex;align-items:center;justify-content:space-between;"><span>Pin Color</span><button onclick="resetHotspotColor()" style="background:none;border:none;cursor:pointer;font-family:var(--mono);font-size:9px;color:var(--muted);letter-spacing:0.5px;padding:0;">Reset</button></label>
+      <input type="color" id="hotspotColor" value="#00c8ff" style="width:100%;height:32px;padding:2px 4px;border:1px solid var(--border);background:var(--bg);border-radius:3px;cursor:pointer;box-sizing:border-box;">
     </div>
     <div class="modal-actions">
       <button class="modal-btn-cancel" onclick="cancelHotspotModal()">Cancel</button>
@@ -766,6 +807,19 @@ const minimapCanvas= document.getElementById('minimapCanvas');
 const mctx         = minimapCanvas.getContext('2d');
 const mapEdCanvas  = document.getElementById('mapEditorCanvas');
 const meCtx        = mapEdCanvas.getContext('2d');
+
+// ── Hotspot icon SVGs & default colors ──
+const HOTSPOT_ICONS = {
+  info:      `<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>`,
+  warning:   `<svg viewBox="0 0 24 24"><path d="M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z"/></svg>`,
+  danger:    `<svg viewBox="0 0 24 24"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg>`,
+  important: `<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>`,
+  note:      `<svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 9h-2V5h2v6zm0 4h-2v-2h2v2z"/></svg>`,
+  link:      `<svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`
+};
+const HOTSPOT_ICON_DEFAULTS = {
+  info: '#00c8ff', warning: '#ffaa00', danger: '#ff3c3c', important: '#ff7800', note: '#a064ff', link: '#00e676'
+};
 
 // ── helpers ──
 function currentRoute() { return routes[currentRouteIdx] || null; }
@@ -929,7 +983,8 @@ function confirmAddNode() {
     mapX: null, mapY: null,  // null = unplaced
     floorId: null,
     connections: [],
-    hotspots: []
+    hotspots: [],
+    navArrowColor: null
   };
   // Auto-connect new node to the previous node (bidirectional) so linear nav works
   // by default — users can break this link via the Connect tool in the map editor
@@ -953,6 +1008,7 @@ function openRenameModal(nodeIdx) {
   document.getElementById('renameNodeSub').textContent = `Editing Node ${String(nodeIdx+1).padStart(2,'0')}`;
   document.getElementById('renameNodeImageLabel').textContent = node.image ? 'Image attached — click to replace' : 'No image — click to add';
   document.getElementById('btnRemoveNodeImage').style.display = node.image ? '' : 'none';
+  document.getElementById('navArrowColorInput').value = node.navArrowColor || '#f0a500';
   refreshModalConnections();
   openModal('modalRenameNode');
   setTimeout(() => document.getElementById('renameNodeName').focus(), 100);
@@ -1071,9 +1127,11 @@ function confirmRenameNode() {
   const node = currentNodes()[renameTargetIdx]; if (!node) return;
   node.name = document.getElementById('renameNodeName').value.trim() || node.name;
   node.desc = document.getElementById('renameNodeDesc').value.trim();
+  const pickedColor = document.getElementById('navArrowColorInput').value;
+  node.navArrowColor = (pickedColor && pickedColor.toLowerCase() !== '#f0a500') ? pickedColor : null;
   closeModal('modalRenameNode');
   buildSidebar(); drawMinimap();
-  if (renameTargetIdx === currentNodeIdx) updateHeaders(node, renameTargetIdx);
+  if (renameTargetIdx === currentNodeIdx) { updateHeaders(node, renameTargetIdx); buildHotspots(renameTargetIdx); }
   if (mapEditorOpen) { buildEditorNodeList(); drawMapEditor(); }
   renameTargetIdx = -1;
   saveRoutes();
@@ -1397,6 +1455,7 @@ function buildHotspots(index) {
       angle = Math.atan2(target.mapX - current.mapX, -(target.mapY - current.mapY));
     targets.push({ idx: targetIdx, angle, label: target.name });
   });
+  const nodeColor = current && current.navArrowColor ? current.navArrowColor : null;
   targets.forEach(t => {
     const el = document.createElement('div');
     el.className = 'hotspot';
@@ -1406,6 +1465,13 @@ function buildHotspots(index) {
         <svg viewBox="0 0 24 24"><path d="M12 2l-5.5 9h11z"/></svg>
       </div>
       <div class="hotspot-label">${t.label}</div>`;
+    if (nodeColor) {
+      const arrowEl = el.querySelector('.hotspot-arrow');
+      const r = parseInt(nodeColor.slice(1,3),16), g = parseInt(nodeColor.slice(3,5),16), b = parseInt(nodeColor.slice(5,7),16);
+      arrowEl.style.borderColor = nodeColor;
+      arrowEl.style.background = `rgba(${r},${g},${b},0.15)`;
+      arrowEl.querySelector('svg').style.fill = nodeColor;
+    }
     el.style.pointerEvents = 'all';
     el.addEventListener('click', () => navigateTo(t.idx));
     container.appendChild(el);
@@ -1418,10 +1484,23 @@ function buildHotspots(index) {
       el.className = 'hotspot-custom';
       el.dataset.angle = hs.yaw;
       el.dataset.pitch = hs.pitch;
-      const iconSvg = hs.type === 'info'
-        ? `<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>`
-        : `<svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`;
-      el.innerHTML = `<div class="hotspot-pin ${hs.type}-type">${iconSvg}</div><div class="hotspot-custom-label">${hs.label}</div>`;
+      const resolvedIcon = hs.icon || (hs.type === 'link' ? 'link' : 'info');
+      const iconSvg = HOTSPOT_ICONS[resolvedIcon] || HOTSPOT_ICONS.info;
+      const pinColor = hs.color || HOTSPOT_ICON_DEFAULTS[resolvedIcon] || '#00c8ff';
+      const pinEl = document.createElement('div');
+      pinEl.className = `hotspot-pin ${hs.type}-type`;
+      if (hs.color) {
+        // Override CSS class colors with custom color
+        const r = parseInt(pinColor.slice(1,3),16), g = parseInt(pinColor.slice(3,5),16), b = parseInt(pinColor.slice(5,7),16);
+        pinEl.style.borderColor = pinColor;
+        pinEl.style.background = `rgba(${r},${g},${b},0.15)`;
+      }
+      pinEl.innerHTML = iconSvg;
+      if (hs.color) pinEl.querySelector('svg').style.color = pinColor;
+      const labelEl = document.createElement('div');
+      labelEl.className = 'hotspot-custom-label';
+      labelEl.textContent = hs.label;
+      el.appendChild(pinEl); el.appendChild(labelEl);
       el.style.pointerEvents = 'all';
       if (hs.type === 'info') {
         el.addEventListener('click', () => showHotspotInfo(hs));
@@ -2660,6 +2739,8 @@ function openAddHotspotModal(yawVal, pitchVal) {
   document.getElementById('hotspotLabel').value = '';
   document.getElementById('hotspotContent').value = '';
   document.getElementById('hotspotType').value = 'info';
+  selectHotspotIcon('info');
+  document.getElementById('hotspotColor').value = HOTSPOT_ICON_DEFAULTS.info;
   document.getElementById('addHotspotSub').textContent =
     `Yaw: ${Math.round(yawVal * 180 / Math.PI)}°  Pitch: ${Math.round(pitchVal * 180 / Math.PI)}°`;
   document.querySelector('#modalAddHotspot .modal-title').textContent = 'Add Hotspot';
@@ -2681,6 +2762,19 @@ function updateHotspotTypeFields() {
   const type = document.getElementById('hotspotType').value;
   document.getElementById('hotspotContentField').style.display = type === 'info' ? '' : 'none';
   document.getElementById('hotspotLinkField').style.display    = type === 'link' ? '' : 'none';
+  document.getElementById('hotspotIconField').style.display    = type === 'link' ? 'none' : '';
+}
+function selectHotspotIcon(icon) {
+  document.querySelectorAll('.hs-icon-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.icon === icon));
+  document.getElementById('hotspotColor').value = HOTSPOT_ICON_DEFAULTS[icon] || '#00c8ff';
+}
+function resetHotspotColor() {
+  const activeBtn = document.querySelector('.hs-icon-btn.active');
+  const icon = activeBtn ? activeBtn.dataset.icon : 'info';
+  document.getElementById('hotspotColor').value = HOTSPOT_ICON_DEFAULTS[icon] || '#00c8ff';
+}
+function resetNavArrowColor() {
+  document.getElementById('navArrowColorInput').value = '#f0a500';
 }
 function confirmAddHotspot() {
   const label = document.getElementById('hotspotLabel').value.trim();
@@ -2689,19 +2783,24 @@ function confirmAddHotspot() {
   const content = type === 'info'
     ? document.getElementById('hotspotContent').value.trim()
     : document.getElementById('hotspotLinkTarget').value;
+  const activeIconBtn = document.querySelector('.hs-icon-btn.active');
+  const icon = activeIconBtn ? activeIconBtn.dataset.icon : (type === 'link' ? 'link' : 'info');
+  const pickedColor = document.getElementById('hotspotColor').value;
+  const defaultColor = HOTSPOT_ICON_DEFAULTS[icon] || '#00c8ff';
+  const color = pickedColor.toLowerCase() !== defaultColor.toLowerCase() ? pickedColor : null;
   const node = currentNodes()[currentNodeIdx];
   if (!node) return;
   node.hotspots = node.hotspots || [];
   if (editingHotspotId) {
     const hs = node.hotspots.find(h => h.id === editingHotspotId);
-    if (hs) { hs.type = type; hs.label = label; hs.content = content; }
+    if (hs) { hs.type = type; hs.icon = icon; hs.color = color; hs.label = label; hs.content = content; }
     editingHotspotId = null;
     closeModal('modalAddHotspot');
     buildHotspots(currentNodeIdx);
     saveRoutes();
     openManageHotspotsModal();
   } else {
-    node.hotspots.push({ id: 'HS' + Date.now(), type, yaw: pendingHotspotYaw, pitch: pendingHotspotPitch, label, content });
+    node.hotspots.push({ id: 'HS' + Date.now(), type, icon, color, yaw: pendingHotspotYaw, pitch: pendingHotspotPitch, label, content });
     closeModal('modalAddHotspot');
     buildHotspots(currentNodeIdx);
     saveRoutes();
@@ -2737,13 +2836,15 @@ function buildHotspotManageList() {
   hotspots.forEach(hs => {
     const row = document.createElement('div');
     row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);';
-    const infoIcon = `<svg viewBox="0 0 24 24" width="14" height="14" fill="var(--accent2)" style="flex-shrink:0"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/></svg>`;
-    const linkIcon = `<svg viewBox="0 0 24 24" width="14" height="14" fill="var(--success)" style="flex-shrink:0"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`;
+    const resolvedIcon = hs.icon || (hs.type === 'link' ? 'link' : 'info');
+    const listPinColor = hs.color || HOTSPOT_ICON_DEFAULTS[resolvedIcon] || '#00c8ff';
+    const listIconSvg = HOTSPOT_ICONS[resolvedIcon] || HOTSPOT_ICONS.info;
+    const listIcon = listIconSvg.replace('<svg ', `<svg width="14" height="14" fill="${listPinColor}" style="flex-shrink:0" `);
     const badgeColor = hs.type === 'info' ? 'rgba(0,200,255,0.12)' : 'rgba(0,230,118,0.12)';
     const badgeText = hs.type === 'info' ? 'var(--accent2)' : 'var(--success)';
     const previewText = hs.type === 'info' ? (hs.content || '—') : ('→ ' + (currentNodes().find(n => n.id === hs.content) || {name: hs.content}).name);
     row.innerHTML = `
-      ${hs.type === 'info' ? infoIcon : linkIcon}
+      ${listIcon}
       <div style="flex:1;min-width:0;">
         <div style="font-family:var(--cond);font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${hs.label}</div>
         <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${previewText}</div>
@@ -2780,6 +2881,9 @@ function openEditHotspotModal(hsId) {
   document.getElementById('hotspotLabel').value = hs.label;
   document.getElementById('hotspotContent').value = hs.type === 'info' ? (hs.content || '') : '';
   document.getElementById('hotspotType').value = hs.type;
+  const editIcon = hs.icon || (hs.type === 'link' ? 'link' : 'info');
+  selectHotspotIcon(editIcon);
+  document.getElementById('hotspotColor').value = hs.color || HOTSPOT_ICON_DEFAULTS[editIcon] || '#00c8ff';
   // populate link target select and pre-select current target
   const sel = document.getElementById('hotspotLinkTarget');
   sel.innerHTML = '';
