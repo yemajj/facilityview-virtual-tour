@@ -128,7 +128,7 @@
   .info-stat-val { font-family:var(--mono); font-size:11px; color:var(--text); margin-top:1px; }
 
   /* MINIMAP */
-  .minimap { position:absolute; bottom:80px; right:20px; width:240px; background:rgba(13,15,18,0.88); border:1px solid var(--border); backdrop-filter:blur(8px); pointer-events:none; overflow:hidden; }
+  .minimap { position:absolute; bottom:80px; right:20px; width:320px; background:rgba(13,15,18,0.88); border:1px solid var(--border); backdrop-filter:blur(8px); pointer-events:none; overflow:hidden; }
   .minimap-header { display:flex; align-items:center; justify-content:space-between; padding:5px 8px 4px; border-bottom:1px solid var(--border); }
   .minimap-title { font-family:var(--mono); font-size:8px; letter-spacing:2px; color:var(--muted); text-transform:uppercase; }
   .minimap-edit-btn { font-family:var(--mono); font-size:8px; color:var(--accent2); letter-spacing:1px; background:none; border:none; cursor:pointer; padding:0; pointer-events:all; text-transform:uppercase; transition:color 0.15s; }
@@ -301,6 +301,11 @@
   .selected-node-floor-label { font-family:var(--mono); font-size:8px; color:var(--muted); letter-spacing:1px; text-transform:uppercase; margin-top:8px; margin-bottom:3px; }
   .selected-node-floor-select { width:100%; background:var(--bg); border:1px solid var(--border); color:var(--text); padding:4px 6px; font-family:var(--mono); font-size:10px; border-radius:2px; cursor:pointer; }
   .selected-node-floor-select:focus { outline:none; border-color:var(--accent); }
+  .selected-node-connections { display:flex; flex-direction:column; gap:3px; margin-top:3px; max-height:120px; overflow-y:auto; }
+  .selected-node-conn-row { display:flex; align-items:center; justify-content:space-between; gap:4px; padding:3px 5px; background:rgba(255,255,255,0.03); border-radius:2px; border:1px solid var(--border); }
+  .selected-node-conn-name { font-family:var(--mono); font-size:9px; color:var(--text); flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .selected-node-conn-remove { font-size:13px; color:var(--muted); cursor:pointer; flex-shrink:0; line-height:1; padding:0 2px; transition:color 0.1s; }
+  .selected-node-conn-remove:hover { color:#ff6b6b; }
 
   /* Floor tabs bar */
   .floor-tabs-bar { display:flex; align-items:center; height:36px; background:var(--panel); border-bottom:1px solid var(--border); flex-shrink:0; overflow:hidden; }
@@ -449,7 +454,7 @@
             <button class="minimap-minimize-btn" id="minimapMinBtn" onclick="toggleMinimapMinimize()" title="Minimize map">▼</button>
           </div>
         </div>
-        <canvas id="minimapCanvas" width="240" height="195"></canvas>
+        <canvas id="minimapCanvas" width="320" height="260"></canvas>
       </div>
 
       <div class="route-nav" id="routeNav">
@@ -1319,6 +1324,11 @@ function updateHotspotPositions() {
     const visible = Math.abs(normYaw) < halfFov * 0.88 && Math.abs(relPitch) < halfFovV;
     el.style.display  = visible ? 'flex' : 'none';
     el.style.left = px + 'px'; el.style.top = py + 'px';
+    // Rotate nav arrow icon to point toward destination on screen
+    if (!el.classList.contains('hotspot-custom')) {
+      const arrowEl = el.querySelector('.hotspot-arrow');
+      if (arrowEl) arrowEl.style.transform = `rotate(${normYaw * (180 / Math.PI)}deg)`;
+    }
   });
 }
 
@@ -1332,7 +1342,7 @@ function toggleMinimapMinimize() {
   btn.textContent = widget.classList.contains('minimized') ? '▲' : '▼';
 }
 function drawMinimap() {
-  const W = 240, H = 195;
+  const W = 320, H = 260;
   mctx.clearRect(0, 0, W, H);
 
   // Background
@@ -1462,11 +1472,35 @@ function drawMinimap() {
       mctx.fillStyle = '#f0a500'; mctx.fill();
     }
 
-    // Node label
-    mctx.font = '7px monospace';
-    mctx.fillStyle  = isActive ? '#f0a500' : '#4a5568';
-    mctx.textAlign  = 'center';
-    mctx.fillText(node.id, x, y + 16);
+    // Cross-floor indicator — drawn after node dot
+    const hasCrossFloor = (node.connections || []).some(id => {
+      const t = allNodes.find(n => n.id === id);
+      return t && t.floorId !== node.floorId;
+    });
+    if (hasCrossFloor) {
+      // Draw small up+down chevron above node
+      mctx.save();
+      mctx.fillStyle = 'rgba(0,200,255,0.9)';
+      mctx.font = 'bold 9px monospace';
+      mctx.textAlign = 'center';
+      mctx.textBaseline = 'middle';
+      mctx.fillText('⬍', x, y - (isActive ? 13 : 10));
+      mctx.textBaseline = 'alphabetic';
+      mctx.restore();
+    }
+
+    // Node label — larger font with dark backing for readability
+    const labelText = node.id;
+    const labelY = y + (isActive ? 20 : 17);
+    mctx.font = 'bold 9px monospace';
+    mctx.textAlign = 'center';
+    // Dark backing rect
+    const tw = mctx.measureText(labelText).width;
+    mctx.fillStyle = 'rgba(8,10,13,0.75)';
+    mctx.fillRect(x - tw/2 - 2, labelY - 9, tw + 4, 11);
+    // Label text
+    mctx.fillStyle = isActive ? '#f0a500' : isPast ? 'rgba(200,175,100,0.85)' : '#8aa0bb';
+    mctx.fillText(labelText, x, labelY);
   });
 }
 
@@ -1582,9 +1616,9 @@ function buildEditorNodeList() {
 }
 
 function updateSelectedNodeInfo() {
-  const el   = document.getElementById('selectedNodeInfo');
+  const el    = document.getElementById('selectedNodeInfo');
   const nodes = currentNodes();
-  const node = nodes[mapSelectedNodeIdx];
+  const node  = nodes[mapSelectedNodeIdx];
   if (!node) {
     el.innerHTML = '<div class="selected-node-info-empty">Select a node from the list below to place or move it on the map.</div>';
     return;
@@ -1593,6 +1627,29 @@ function updateSelectedNodeInfo() {
   const route = currentRoute();
   const floorOptions = (route?.floors || []).map(f =>
     `<option value="${f.id}" ${node.floorId === f.id ? 'selected' : ''}>${f.name}</option>`).join('');
+
+  // Build connection list HTML up-front to avoid nested template literal issues
+  const conns = node.connections || [];
+  let connSectionHtml = '<div class="selected-node-floor-label" style="margin-top:8px;font-style:italic;">No connections</div>';
+  if (conns.length) {
+    const rows = conns.map(cid => {
+      const cn = nodes.find(n => n.id === cid);
+      if (!cn) return '';
+      const floorName = (route?.floors || []).find(f => f.id === cn.floorId)?.name || '';
+      const cross = cn.floorId !== node.floorId ? ' ⬍' : '';
+      const badge = floorName ? ` <em style="opacity:.5;font-style:normal">[${floorName}]</em>` : '';
+      return `<div class="selected-node-conn-row">` +
+             `<span class="selected-node-conn-name">${cn.id}: ${cn.name}${cross}${badge}</span>` +
+             `<span class="selected-node-conn-remove" onclick="removeConnection(${mapSelectedNodeIdx},'${cid}')">×</span>` +
+             `</div>`;
+    }).join('');
+    connSectionHtml =
+      `<div class="selected-node-floor-label" style="margin-top:10px;display:flex;align-items:center;justify-content:space-between;">` +
+      `<span>Connections (${conns.length})</span>` +
+      `<span onclick="removeAllConnections(${mapSelectedNodeIdx})" style="cursor:pointer;color:#ff6b6b;font-size:8px;letter-spacing:0.5px;">CLEAR ALL</span>` +
+      `</div><div class="selected-node-connections">${rows}</div>`;
+  }
+
   el.innerHTML = `
     <div class="selected-node-name">${node.id}: ${node.name}</div>
     <div class="selected-node-coords">${isPlaced ? `X:${Math.round(node.mapX)}  Y:${Math.round(node.mapY)}` : 'Not yet placed'}</div>
@@ -1601,7 +1658,9 @@ function updateSelectedNodeInfo() {
     <select class="selected-node-floor-select" onchange="assignNodeFloor(${mapSelectedNodeIdx}, this.value)">
       <option value="" ${!node.floorId ? 'selected' : ''}>— Unassigned —</option>
       ${floorOptions}
-    </select>`;
+    </select>
+    ${connSectionHtml}
+  `;
 }
 
 // ── Floor tab functions ──
@@ -1686,6 +1745,28 @@ function assignNodeFloor(nodeIdx, floorId) {
   const node = currentNodes()[nodeIdx]; if (!node) return;
   node.floorId = floorId || null;
   updateSelectedNodeInfo(); drawMapEditor(); saveRoutes();
+}
+function removeConnection(nodeIdx, targetId) {
+  pushUndo();
+  const nodes = currentNodes();
+  const node = nodes[nodeIdx]; if (!node) return;
+  node.connections = (node.connections || []).filter(id => id !== targetId);
+  const target = nodes.find(n => n.id === targetId);
+  if (target) target.connections = (target.connections || []).filter(id => id !== node.id);
+  buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor(); saveRoutes();
+  if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
+}
+function removeAllConnections(nodeIdx) {
+  pushUndo();
+  const nodes = currentNodes();
+  const node = nodes[nodeIdx]; if (!node) return;
+  (node.connections || []).forEach(targetId => {
+    const target = nodes.find(n => n.id === targetId);
+    if (target) target.connections = (target.connections || []).filter(id => id !== node.id);
+  });
+  node.connections = [];
+  buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor(); saveRoutes();
+  if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
 }
 
 // ── Map editor canvas drawing ──
@@ -1917,6 +1998,7 @@ mapEdCanvas.addEventListener('mousedown', e => {
       if (nodes[mapSelectedNodeIdx].floorId === null) nodes[mapSelectedNodeIdx].floorId = mapCurrentFloorId;
       buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor();
       saveRoutes();
+      if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
       // Auto-advance to next unplaced
       const nextUnplaced = nodes.findIndex((n, i) => i > mapSelectedNodeIdx && n.mapX === null);
       if (nextUnplaced >= 0) {
@@ -1954,6 +2036,7 @@ mapEdCanvas.addEventListener('mouseup', () => {
     mapDraggingNodeIdx = -1;
     buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor();
     saveRoutes();
+    if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
   }
 });
 
