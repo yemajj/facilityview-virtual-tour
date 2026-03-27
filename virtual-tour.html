@@ -349,6 +349,23 @@
   .floor-add-btn { width:36px; height:100%; flex-shrink:0; background:transparent; border:none; border-left:1px solid var(--border); color:var(--muted); font-size:20px; cursor:pointer; transition:color 0.15s, background 0.15s; display:flex; align-items:center; justify-content:center; line-height:1; }
   .floor-add-btn:hover { color:var(--accent); background:rgba(240,165,0,0.07); }
   .editor-node-floor { font-family:var(--mono); font-size:8px; color:var(--muted); letter-spacing:1px; flex-shrink:0; }
+
+  /* ── VIEWER MODE — hide all editing UI ── */
+  body.viewer-mode #btnNewRoute,
+  body.viewer-mode #btnDuplicateRoute,
+  body.viewer-mode #btnDeleteRoute,
+  body.viewer-mode #btnHotspotEdit,
+  body.viewer-mode #btnManageHotspots,
+  body.viewer-mode #btnExport,
+  body.viewer-mode #btnImport,
+  body.viewer-mode #btnExportViewer,
+  body.viewer-mode #savedIndicator,
+  body.viewer-mode .status-dot,
+  body.viewer-mode .status-label,
+  body.viewer-mode .minimap-edit-btn,
+  body.viewer-mode #mapEditorWrap,
+  body.viewer-mode .sidebar-bottom,
+  body.viewer-mode .loc-action-btn { display:none !important; }
 </style>
 </head>
 <body>
@@ -378,6 +395,10 @@
     </button>
   </div>
   <div class="header-right">
+    <button class="btn-icon-text" id="btnExportViewer" onclick="exportViewerPackage()" title="Export a self-contained viewer file for trainees">
+      <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
+      Viewer
+    </button>
     <button class="btn-icon-text" id="btnExport" onclick="exportRoutes()" title="Export all routes to JSON">
       <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
       Export
@@ -837,6 +858,10 @@ let pinchStartFov  = 75;
 
 // Compass rotation tracking (accumulated, unwrapped to avoid CSS transition spin-back)
 let lastCompassDeg = 0;
+
+// Viewer package mode — set to true and BAKED_ROUTES injected by exportViewerPackage()
+let VIEWER_MODE = false;
+const BAKED_ROUTES = null;
 
 // IndexedDB
 let db = null;
@@ -2639,11 +2664,10 @@ function flashSavedIndicator() {
 }
 
 // ══════════════════════════════════════════════════
-// EXPORT / IMPORT
+// VIEWER PACKAGE EXPORT
 // ══════════════════════════════════════════════════
-function exportRoutes() {
-  if (!routes.length) { alert('No routes to export.'); return; }
-  const data = {
+function serializeRoutesForExport() {
+  return {
     version: 1,
     exported: new Date().toISOString(),
     routes: routes.map(r => ({
@@ -2655,10 +2679,70 @@ function exportRoutes() {
         mapX: n.mapX, mapY: n.mapY,
         floorId: n.floorId || null,
         connections: n.connections || [],
-        hotspots: n.hotspots || []
+        hotspots: n.hotspots || [],
+        navArrowColor: n.navArrowColor || null,
+        thumbUrl: null  // omit thumbnails — regenerated on demand
       }))
     }))
   };
+}
+async function loadFromBaked(data) {
+  const promises = [];
+  (data.routes || []).forEach(rd => {
+    const route = { id: rd.id, name: rd.name, desc: rd.desc || '', nodes: [], floors: [] };
+    (rd.floors || [{ id: 'F0', name: 'Floor 1', imageSrc: null }]).forEach(f => {
+      const fl = { id: f.id, name: f.name, image: null };
+      if (f.imageSrc) {
+        fl.image = new Image();
+        promises.push(new Promise(res => { fl.image.onload = fl.image.onerror = res; }));
+        fl.image.src = f.imageSrc;
+      }
+      route.floors.push(fl);
+    });
+    (rd.nodes || []).forEach(nd => {
+      let image = null;
+      if (nd.imageSrc) {
+        image = new Image();
+        promises.push(new Promise(res => { image.onload = image.onerror = res; }));
+        image.src = nd.imageSrc;
+      }
+      route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, floorId: nd.floorId || null, connections: nd.connections || [], hotspots: nd.hotspots || [], navArrowColor: nd.navArrowColor || null, thumbUrl: null });
+    });
+    routes.push(route);
+  });
+  await Promise.all(promises);
+}
+async function exportViewerPackage() {
+  if (!routes.length) { alert('No routes to export.'); return; }
+  showLoader('Generating viewer package…');
+  try {
+    const data = serializeRoutesForExport();
+    const dataJson = JSON.stringify(data);
+
+    // Get current page HTML (script content preserved as-is in outerHTML)
+    let html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+
+    // Inject viewer mode flag and baked route data
+    html = html.replace('let VIEWER_MODE = false;', 'let VIEWER_MODE = true;');
+    html = html.replace('const BAKED_ROUTES = null;', 'const BAKED_ROUTES = ' + dataJson + ';');
+
+    const blob = new Blob([html], { type: 'text/html' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = 'viewer.html'; a.click();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    alert('Export failed: ' + e.message);
+  }
+  hideLoader();
+}
+
+// ══════════════════════════════════════════════════
+// EXPORT / IMPORT
+// ══════════════════════════════════════════════════
+function exportRoutes() {
+  if (!routes.length) { alert('No routes to export.'); return; }
+  const data = serializeRoutesForExport();
   const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
@@ -3131,6 +3215,19 @@ async function init() {
   document.getElementById('hotspots').style.opacity = '0';
   initWebGL();
   resizeCanvas();
+
+  if (VIEWER_MODE && BAKED_ROUTES) {
+    document.body.classList.add('viewer-mode');
+    document.title = 'FacilityView Viewer';
+    showLoader('Loading viewer…');
+    await loadFromBaked(BAKED_ROUTES);
+    hideLoader();
+    rebuildRouteSelect();
+    document.getElementById('welcome').classList.add('hidden');
+    selectRoute(0);
+    return;
+  }
+
   await openDB();
   showLoader('Loading tours...');
   const hasData = await loadRoutes();
