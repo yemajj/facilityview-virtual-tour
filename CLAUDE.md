@@ -3,7 +3,7 @@
 ## Project Overview
 FacilityView is a single-file HTML/CSS/JS virtual tour simulator for facility worker training. Users upload equirectangular panorama images, link them into named routes, and navigate between them in a Google Street View-style viewer.
 
-**The entire app lives in one file:** `virtual-tour.html` (~2,600 lines)
+**The entire app lives in one file:** `virtual-tour.html` (~2,904 lines)
 
 ---
 
@@ -12,26 +12,26 @@ FacilityView is a single-file HTML/CSS/JS virtual tour simulator for facility wo
 | Lines | Content |
 |---|---|
 | 1–320 | `<head>`: CSS styles (incl. floor tabs) |
-| 320–570 | HTML: header, sidebar, viewer, map editor overlay (incl. floor tabs bar) |
-| 570–730 | HTML: modals (add route, add node, edit node, hotspots, manage hotspots) |
-| 675–730 | `<script>` open + all JS global state declarations |
-| 740–755 | Helper functions: `currentRoute()`, `currentNodes()` |
-| 755–815 | Route management: `openNewRouteModal`, `confirmNewRoute`, `duplicateRoute`, `rebuildRouteSelect`, `selectRoute` |
-| 816–970 | Node management: `triggerAddNode`, `confirmAddNode`, `openRenameModal`, `removeNodeImage`, `confirmRenameNode`, `deleteNode`, `getThumbnail`, `buildSidebar`, `reorderNode` |
-| 1050–1130 | Navigation: `navigateTo`, `navigatePrev/Next`, `updateHeaders`, `updateRouteProgress` |
-| 1130–1220 | Canvas/rendering utils: `resizeCanvas`, `clearViewer`, `renderFrame`, `scheduleRender`, `updateHUD` |
-| 1220–1330 | Hotspot DOM: `buildHotspots`, `updateHotspotPositions` |
-| 1330–1470 | Minimap: `toggleMinimapMinimize`, `drawMinimap` |
-| 1470–1830 | Map editor: `openMapEditor`, `closeMapEditor`, undo/redo helpers, `setTool`, `buildEditorNodeList`, floor tab functions, `drawMapEditor`, mouse/click handlers |
-| 1830–1920 | Floorplan upload: `clearFloorplan`, undo/redo keyboard listener |
-| 1920–1940 | View controls: `adjustFov`, `resetView`, `toggleFullscreen`, `openModal`, `closeModal` |
-| 1950–2010 | Demo panoramas: `makeSyntheticPanorama`, `loadDemo` |
-| 2010–2090 | IndexedDB: `openDB`, `saveRoutes`, `loadRoutes`, `flashSavedIndicator` |
-| 2090–2180 | Export/Import: `exportRoutes`, `importRoutes` |
-| 2180–2210 | Settings & inertia: `toggleSettings`, `updateSensitivity`, `startInertia` |
-| 2210–2400 | Custom hotspot CRUD: `toggleHotspotEditMode`, `canvasClickToYawPitch`, `openAddHotspotModal`, `confirmAddHotspot`, `deleteHotspot`, `openManageHotspotsModal`, `buildHotspotManageList`, `openEditHotspotModal`, `startRepositionHotspot`, `showHotspotInfo` |
-| 2400–2510 | WebGL init: `initWebGL` (shaders, texture setup, fallback) |
-| 2510–2540 | App init: `showLoader`, `hideLoader`, `init` |
+| 320–596 | HTML: header, sidebar, viewer, map editor overlay (incl. floor tabs bar) |
+| 596–705 | HTML: modals (add route, add node, edit node with connections, hotspots, manage hotspots) |
+| 705–768 | `<script>` open + all JS global state declarations |
+| 768–795 | Helper functions: `currentRoute()`, `currentNodes()` |
+| 795–938 | Route management: `openNewRouteModal`, `confirmNewRoute`, `deleteRoute`, `duplicateRoute`, `rebuildRouteSelect`, `selectRoute` |
+| 938–1190 | Node management: `openRenameModal`, `refreshModalConnections`, `addConnectionFromModal`, `removeConnectionFromModal`, `removeAllConnectionsFromModal`, `confirmRenameNode`, `deleteNode`, `getThumbnail`, `buildSidebar`, `reorderNode` |
+| 1190–1262 | Navigation: `navigateTo`, `navigatePrev/Next`, `updateHeaders`, `updateRouteProgress` |
+| 1262–1356 | Canvas/rendering utils: `resizeCanvas`, `clearViewer`, `renderFrame`, `scheduleRender`, `updateHUD` |
+| 1356–1459 | Hotspot DOM: `buildHotspots`, `updateHotspotPositions` |
+| 1459–1631 | Minimap: `toggleMinimapMinimize`, `drawMinimap` |
+| 1631–2185 | Map editor: `openMapEditor`, `closeMapEditor`, undo/redo helpers, `setTool`, `buildEditorNodeList`, floor tab functions (`buildFloorTabs`, `switchFloor`, `addFloor`, `deleteFloor`, `startFloorRename`, `assignNodeFloor`), `removeConnection`, `removeAllConnections`, `drawMapEditor`, mouse/click handlers |
+| 2185–2311 | Floorplan upload: `clearFloorplan`, undo/redo keyboard listener |
+| 2311–2335 | View controls: `adjustFov`, `resetView`, `toggleFullscreen`, `openModal`, `closeModal` |
+| 2335–2398 | Demo panoramas: `makeSyntheticPanorama`, `loadDemo` |
+| 2398–2481 | IndexedDB: `openDB`, `saveRoutes`, `loadRoutes`, `flashSavedIndicator` |
+| 2481–2571 | Export/Import: `exportRoutes`, `importRoutes` |
+| 2571–2604 | Settings & inertia: `toggleSettings`, `updateSensitivity`, `startInertia` |
+| 2604–2782 | Custom hotspot CRUD: `toggleHotspotEditMode`, `canvasClickToYawPitch`, `openAddHotspotModal`, `confirmAddHotspot`, `deleteHotspot`, `openManageHotspotsModal`, `buildHotspotManageList`, `openEditHotspotModal`, `startRepositionHotspot`, `showHotspotInfo` |
+| 2782–2870 | WebGL init: `initWebGL` (shaders, texture setup, fallback) |
+| 2870–2904 | App init: `showLoader`, `hideLoader`, `init` |
 
 ---
 
