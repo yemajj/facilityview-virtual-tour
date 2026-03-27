@@ -3,7 +3,7 @@
 ## Project Overview
 FacilityView is a single-file HTML/CSS/JS virtual tour simulator for facility worker training. Users upload equirectangular panorama images, link them into named routes, and navigate between them in a Google Street View-style viewer.
 
-**The entire app lives in one file:** `virtual-tour.html` (~3,044 lines)
+**The entire app lives in one file:** `virtual-tour.html` (~3,669 lines)
 
 ---
 
@@ -11,27 +11,29 @@ FacilityView is a single-file HTML/CSS/JS virtual tour simulator for facility wo
 
 | Lines | Content |
 |---|---|
-| 1–335 | `<head>`: CSS styles (incl. floor tabs, hotspot icon types, icon picker buttons) |
-| 335–610 | HTML: header, sidebar, viewer, map editor overlay (incl. floor tabs bar) |
-| 610–720 | HTML: modals (add route, add node, edit node with connections+nav arrow color, hotspots with icon/color picker, manage hotspots) |
-| 720–800 | `<script>` open + all JS global state declarations + `HOTSPOT_ICONS`/`HOTSPOT_ICON_DEFAULTS` constants |
-| 800–810 | Helper functions: `currentRoute()`, `currentNodes()` |
-| 810–960 | Route management: `openNewRouteModal`, `confirmNewRoute`, `deleteRoute`, `duplicateRoute`, `rebuildRouteSelect`, `selectRoute` |
-| 960–1210 | Node management: `openRenameModal`, `refreshModalConnections`, `addConnectionFromModal`, `removeConnectionFromModal`, `removeAllConnectionsFromModal`, `confirmRenameNode`, `deleteNode`, `getThumbnail`, `buildSidebar`, `reorderNode` |
-| 1210–1285 | Navigation: `navigateTo`, `navigatePrev/Next`, `updateHeaders`, `updateRouteProgress` |
-| 1285–1385 | Canvas/rendering utils: `resizeCanvas`, `clearViewer`, `renderFrame`, `scheduleRender`, `updateHUD` |
-| 1385–1490 | Hotspot DOM: `buildHotspots`, `updateHotspotPositions` |
-| 1490–1680 | Minimap: `toggleMinimapMinimize`, `drawMinimap` (incl. cross-floor ghost nodes) |
-| 1680–2250 | Map editor: `openMapEditor`, `closeMapEditor`, undo/redo helpers, `setTool`, `buildEditorNodeList`, floor tab functions, `removeConnection`, `removeAllConnections`, `drawMapEditor`, mouse/click handlers |
-| 2250–2380 | Floorplan upload: `clearFloorplan`, undo/redo keyboard listener |
-| 2380–2410 | View controls: `adjustFov`, `resetView`, `toggleFullscreen`, `openModal`, `closeModal` |
-| 2410–2480 | Demo panoramas: `makeSyntheticPanorama`, `loadDemo` |
-| 2480–2580 | IndexedDB: `openDB`, `saveRoutes`, `loadRoutes`, `flashSavedIndicator` |
-| 2580–2680 | Export/Import: `exportRoutes`, `importRoutes` |
-| 2680–2720 | Settings & inertia: `toggleSettings`, `updateSensitivity`, `startInertia` |
-| 2720–2950 | Custom hotspot CRUD: `toggleHotspotEditMode`, `canvasClickToYawPitch`, `openAddHotspotModal`, `updateHotspotTypeFields`, `selectHotspotIcon`, `resetHotspotColor`, `resetNavArrowColor`, `confirmAddHotspot`, `deleteHotspot`, `openManageHotspotsModal`, `buildHotspotManageList`, `openEditHotspotModal`, `startRepositionHotspot`, `showHotspotInfo` |
-| 2950–3020 | WebGL init: `initWebGL` (shaders, texture setup, fallback) |
-| 3020–3044 | App init: `showLoader`, `hideLoader`, `init` |
+| 1–420 | `<head>`: CSS styles (incl. floor tabs, hotspot icon types, quiz overlay, quiz score modal, quiz editor) |
+| 420–680 | HTML: header (incl. #btnQuizResults), sidebar, viewer (incl. #quizOverlay), map editor overlay |
+| 680–900 | HTML: modals (add route, add node, edit node with connections+nav arrow color+quiz editor, hotspots, manage hotspots, quiz score #modalQuizScore) |
+| 900–990 | `<script>` open + all JS global state declarations + `HOTSPOT_ICONS`/`HOTSPOT_ICON_DEFAULTS` constants |
+| 990–1000 | Helper functions: `currentRoute()`, `currentNodes()` |
+| 1000–1080 | Route management: `openNewRouteModal`, `confirmNewRoute`, `deleteRoute`, `duplicateRoute`, `rebuildRouteSelect`, `selectRoute` |
+| 1080–1430 | Node management: `openRenameModal`, `refreshModalConnections`, `addConnectionFromModal`, `removeConnectionFromModal`, `removeAllConnectionsFromModal`, `confirmRenameNode`, `deleteNode`, `getThumbnail`, `buildSidebar`, `reorderNode` |
+| 1430–1510 | Navigation: `navigateTo`, `navigatePrev/Next`, `updateHeaders`, `updateRouteProgress` |
+| 1510–1620 | Canvas/rendering utils: `resizeCanvas`, `clearViewer`, `renderFrame`, `scheduleRender`, `updateHUD` |
+| 1620–1740 | Hotspot DOM: `buildHotspots`, `updateHotspotPositions` |
+| 1740–1940 | Minimap: `toggleMinimapMinimize`, `drawMinimap` (incl. cross-floor ghost nodes) |
+| 1940–2530 | Map editor: `openMapEditor`, `closeMapEditor`, undo/redo helpers, `setTool`, `buildEditorNodeList`, floor tab functions, `removeConnection`, `removeAllConnections`, `drawMapEditor`, mouse/click handlers |
+| 2530–2670 | Floorplan upload: `clearFloorplan`, undo/redo keyboard listener |
+| 2670–2710 | View controls: `adjustFov`, `resetView`, `toggleFullscreen`, `openModal`, `closeModal` |
+| 2710–2790 | Demo panoramas: `makeSyntheticPanorama`, `loadDemo` |
+| 2790–2890 | IndexedDB: `openDB`, `saveRoutes`, `loadRoutes`, `flashSavedIndicator` |
+| 2890–3000 | Viewer package + Export/Import: `serializeRoutesForExport`, `loadFromBaked`, `exportViewerPackage`, `exportRoutes`, `importRoutes` |
+| 3000–3040 | Settings & inertia: `toggleSettings`, `updateSensitivity`, `startInertia` |
+| 3040–3130 | Kiosk mode: `enterKioskMode`, `exitKioskMode`, `setKioskAuto`, `setKioskInterval`, `startKioskTimer`, `stopKioskTimer` |
+| 3130–3290 | Quiz mode: `checkNodeQuiz`, `showQuizQuestion`, `submitQuizAnswer`, `closeQuizOverlay`, `showQuizScore`, `resetQuizSession`, `toggleQuizEditor` |
+| 3290–3560 | Custom hotspot CRUD: `toggleHotspotEditMode`, `canvasClickToYawPitch`, `openAddHotspotModal`, `updateHotspotTypeFields`, `selectHotspotIcon`, `resetHotspotColor`, `resetNavArrowColor`, `confirmAddHotspot`, `deleteHotspot`, `openManageHotspotsModal`, `buildHotspotManageList`, `openEditHotspotModal`, `startRepositionHotspot`, `showHotspotInfo`, `showHotspotImage`, `closeLightbox` |
+| 3560–3620 | WebGL init: `initWebGL` (shaders, texture setup, fallback) |
+| 3620–3669 | App init: `showLoader`, `hideLoader`, `init` |
 
 ---
 
@@ -67,7 +69,8 @@ routes[] = [{
     floorId,         // string floor ID (null = unassigned)
     connections: [], // array of node IDs for ALL nav links (bidirectional) — auto-populated on node creation; editable via Connect tool
     navArrowColor: null, // hex string or null (default gold #f0a500) — set via Edit Node modal
-    hotspots: [{ id, type: 'info'|'link', icon: 'info'|'warning'|'danger'|'important'|'note'|'link', color: null|hexStr, yaw, pitch, label, content }]
+    hotspots: [{ id, type: 'info'|'link', icon: 'info'|'warning'|'danger'|'important'|'note'|'link', color: null|hexStr, yaw, pitch, label, content }],
+    quiz: null  // or { question, options: [A,B,C,D], correctIndex: 0–3, explanation: '' }
   }]
 }]
 ```
@@ -133,7 +136,14 @@ routes[] = [{
 | `pushUndo()` | Push snapshot to undoStack (cap 50), clear redoStack |
 | `mapUndo()` | Pop undoStack, restore, push to redoStack, redraw+save |
 | `mapRedo()` | Pop redoStack, restore, push to undoStack, redraw+save |
-| `duplicateRoute()` | Copy route with new ID; shares Image/thumbUrl object references; copies floors[] |
+| `duplicateRoute()` | Copy route with new ID; shares Image/thumbUrl object references; copies floors[] and quiz data |
+| `checkNodeQuiz(index)` | Called from `navigateTo()` after crossfade — shows quiz overlay if node has quiz and it hasn't been answered this session; auto-shows score at last node |
+| `showQuizQuestion(node)` | Render quiz overlay with question and 4 option buttons |
+| `submitQuizAnswer(node, idx)` | Record answer, highlight correct/wrong, show feedback + continue button |
+| `closeQuizOverlay()` | Hide overlay; auto-shows score modal if on last node |
+| `showQuizScore()` | Populate and open #modalQuizScore with % score, pass/fail, per-node breakdown |
+| `resetQuizSession()` | Clear quizAnswered + quizResultsShown; hide Results button |
+| `toggleQuizEditor()` | Expand/collapse quiz editor section in Edit Node modal |
 | `showLoader(msg)` / `hideLoader()` | Show/hide full-screen loading overlay |
 | `init()` | App entry point: openDB → loadRoutes → loadDemo (if empty) |
 
@@ -197,6 +207,10 @@ useWebGL                // true if WebGL initialized successfully
 glProgram, glTexture    // compiled shader program and texture handle
 glYawLoc, glPitchLoc, glFovLoc, glResLoc  // uniform locations
 
+// Quiz session
+quizAnswered            // nodeId → { selectedIdx, correct, correctIdx } — resets on selectRoute
+quizResultsShown        // true after score modal auto-shown; prevents double-show per session
+
 // Other
 db                      // IndexedDB handle
 sidebarOpen             // true when sidebar is expanded
@@ -220,6 +234,7 @@ header
     #hotspots             — container for nav arrow + custom hotspot DOM elements
     #minimapCanvas        — 2D position map (bottom-right, inside .minimap#minimapWidget)
     #hotspotInfoPopup     — floating info panel for info-type hotspots
+    #quizOverlay          — full-screen quiz overlay (z-index 200); shown when arriving at a node with a quiz
     .compass              — yaw indicator (top-right)
     #settingsPanel        — gear menu (sensitivity slider, inertia toggle)
     .controls-bar         — zoom in/out, reset view, fullscreen buttons
@@ -285,10 +300,19 @@ header
 - Change / remove panorama via Edit Node modal
 - Undo / redo in map editor (Ctrl+Z / Ctrl+Y) — node placement, movement, connections
 - Multi-floor support — floor tabs in map editor, per-node floor assignment, cross-floor connections, floor-aware minimap
+- Full connection control — all nav via `connections[]`, editable/removable; linear auto-connect on new node; pre-v2 migration
+- Compass smooth rotation fix (accumulated degrees, no CSS spin-back at north)
+- Custom hotspot icons + color pickers + per-node nav arrow color
+- Node 1 starting yaw faces toward first connected node on map
+- Cross-floor ghost nodes on minimap (connected nodes on other floors shown dimmed)
+- Hotspot links to external URLs, images, and documents/PDFs
+- Export Viewer Package — self-contained viewer.html with baked route data
+- Kiosk / Presentation Mode — hides editing UI, optional auto-advance with progress bar
+- Quiz / Assessment Mode — per-node multiple-choice questions, instant feedback, score modal
 
-## Roadmap (as of 2026-03-26)
+## Roadmap (as of 2026-03-27)
 
-1. Quiz / assessment mode — attach questions to hotspots or route end; score displayed
+1. ~~Quiz / assessment mode~~ ✓ Done — per-node questions, score modal, results button
 2. Training session log — record which nodes were visited, timestamps, quiz scores
 3. ~~Custom hotspot icons~~ ✓ Done — icon/color per hotspot + per-node nav arrow color
 4. Hotspot links to external URLs — open browser tab from a link-type hotspot
