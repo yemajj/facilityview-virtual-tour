@@ -2923,6 +2923,14 @@ async function loadFromBaked(data) {
       }
       route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, floorId: nd.floorId || null, connections: nd.connections || [], hotspots: nd.hotspots || [], navArrowColor: nd.navArrowColor || null, quiz: nd.quiz || null, thumbUrl: null });
     });
+    // Migration: if every node has empty connections[], auto-populate sequential connections
+    const allEmpty = route.nodes.every(n => !n.connections || n.connections.length === 0);
+    if (allEmpty && route.nodes.length > 1) {
+      for (let i = 0; i < route.nodes.length - 1; i++) {
+        route.nodes[i].connections.push(route.nodes[i+1].id);
+        route.nodes[i+1].connections.push(route.nodes[i].id);
+      }
+    }
     routes.push(route);
   });
   await Promise.all(promises);
@@ -2937,9 +2945,15 @@ async function exportViewerPackage() {
     // Get current page HTML (script content preserved as-is in outerHTML)
     let html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
 
+    // Escape </script> occurrences inside the baked JSON so the HTML parser
+    // doesn't mistake them for end-of-script (e.g. from user-typed hotspot text).
+    // JSON allows \/ as an escape for /, so <\/script> round-trips through
+    // JSON.parse correctly and is invisible to the HTML parser.
+    const safeJson = dataJson.replace(/<\/script>/gi, '<\\/script>');
+
     // Inject viewer mode flag and baked route data
     html = html.replace('let VIEWER_MODE = false;', 'let VIEWER_MODE = true;');
-    html = html.replace('const BAKED_ROUTES = null;', 'const BAKED_ROUTES = ' + dataJson + ';');
+    html = html.replace('const BAKED_ROUTES = null;', 'const BAKED_ROUTES = ' + safeJson + ';');
 
     const blob = new Blob([html], { type: 'text/html' });
     const url  = URL.createObjectURL(blob);
@@ -3640,7 +3654,13 @@ async function init() {
     document.body.classList.add('viewer-mode');
     document.title = 'FacilityView Viewer';
     showLoader('Loading viewer…');
-    await loadFromBaked(BAKED_ROUTES);
+    try {
+      await loadFromBaked(BAKED_ROUTES);
+    } catch (e) {
+      hideLoader();
+      alert('Viewer failed to load: ' + e.message);
+      return;
+    }
     hideLoader();
     rebuildRouteSelect();
     document.getElementById('welcome').classList.add('hidden');
