@@ -931,6 +931,13 @@ function confirmAddNode() {
     connections: [],
     hotspots: []
   };
+  // Auto-connect new node to the previous node (bidirectional) so linear nav works
+  // by default — users can break this link via the Connect tool in the map editor
+  if (nodes.length >= 1) {
+    const prev = nodes[nodes.length - 1]; // last existing node (node not yet pushed)
+    prev.connections.push(node.id);
+    node.connections.push(prev.id);
+  }
   nodes.push(node);
   pendingNodeImage = null;
   closeModal('modalAddNode');
@@ -1379,26 +1386,11 @@ function buildHotspots(index) {
   const nodes = currentNodes();
   const current = nodes[index];
   const targets = [];
-  // Always include linear prev / next
-  if (index > 0) {
-    const prev = nodes[index-1];
-    let angle = Math.PI;
-    if (current && current.mapX !== null && prev.mapX !== null)
-      angle = Math.atan2(prev.mapX - current.mapX, -(prev.mapY - current.mapY));
-    targets.push({ idx: index-1, angle, label: '← ' + prev.name });
-  }
-  if (index < nodes.length-1) {
-    const next = nodes[index+1];
-    let angle = 0;
-    if (current && current.mapX !== null && next.mapX !== null)
-      angle = Math.atan2(next.mapX - current.mapX, -(next.mapY - current.mapY));
-    targets.push({ idx: index+1, angle, label: next.name + ' →' });
-  }
-  // Also add explicit connections (skip any that duplicate a linear target)
+  // All navigation is driven by connections[] — linear prev/next is auto-populated
+  // on node creation and can be removed via the Connect tool in the map editor
   (current && current.connections ? current.connections : []).forEach(targetId => {
     const targetIdx = nodes.findIndex(n => n.id === targetId);
     if (targetIdx < 0) return;
-    if (targets.some(t => t.idx === targetIdx)) return; // already included
     const target = nodes[targetIdx];
     let angle = 0;
     if (current.mapX !== null && target.mapX !== null)
@@ -1530,19 +1522,7 @@ function drawMinimap() {
 
   function toMM(nx, ny) { return [nx * scaleX + offX, ny * scaleY + offY]; }
 
-  // Draw sequential order lines (faint) — only between nodes on this floor
-  for (let i = 0; i < allNodes.length - 1; i++) {
-    const a = allNodes[i], b = allNodes[i+1];
-    if (a.mapX === null || b.mapX === null) continue;
-    if (!nodes.includes(a) || !nodes.includes(b)) continue;
-    const [ax, ay] = toMM(a.mapX, a.mapY);
-    const [bx, by] = toMM(b.mapX, b.mapY);
-    mctx.strokeStyle = '#1e2530';
-    mctx.lineWidth = 1;
-    mctx.beginPath(); mctx.moveTo(ax, ay); mctx.lineTo(bx, by); mctx.stroke();
-  }
-
-  // Draw explicit connections (cyan)
+  // Draw connections (cyan) — all navigation connections are explicit
   nodes.forEach((node, i) => {
     if (node.mapX === null || !node.connections || !node.connections.length) return;
     node.connections.forEach(targetId => {
@@ -1944,18 +1924,7 @@ function drawMapEditor() {
     return;
   }
 
-  // Draw sequential order lines (faint dashes — always visible as reference)
-  for (let i = 0; i < nodes.length - 1; i++) {
-    const a = nodes[i], b = nodes[i+1];
-    if (a.mapX === null || b.mapX === null) continue;
-    meCtx.strokeStyle = 'rgba(240,165,0,0.15)';
-    meCtx.lineWidth = 1;
-    meCtx.setLineDash([4, 6]);
-    meCtx.beginPath(); meCtx.moveTo(a.mapX, a.mapY); meCtx.lineTo(b.mapX, b.mapY); meCtx.stroke();
-    meCtx.setLineDash([]);
-  }
-
-  // Draw explicit connection lines (solid cyan — same floor only; cross-floor shown as badge on nodes)
+  // Draw connection lines (solid cyan — same floor only; cross-floor shown as badge on nodes)
   nodes.forEach((node, i) => {
     if (node.mapX === null || !node.connections || !node.connections.length) return;
     node.connections.forEach(targetId => {
@@ -2481,6 +2450,15 @@ async function loadRoutes() {
           }
           route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, floorId: nd.floorId || null, connections: nd.connections || [], hotspots: nd.hotspots || [] });
         });
+        // Migration: if every node has empty connections[], this is a pre-v2 save
+        // — auto-populate sequential bidirectional connections to preserve nav behavior
+        const allEmpty = route.nodes.every(n => !n.connections || n.connections.length === 0);
+        if (allEmpty && route.nodes.length > 1) {
+          for (let i = 0; i < route.nodes.length - 1; i++) {
+            route.nodes[i].connections.push(route.nodes[i+1].id);
+            route.nodes[i+1].connections.push(route.nodes[i].id);
+          }
+        }
         routes.push(route);
       });
       await Promise.all(promises);
@@ -2563,6 +2541,14 @@ async function importRoutes(file) {
         }
         route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, floorId: nd.floorId || null, connections: nd.connections || [], hotspots: nd.hotspots || [] });
       });
+      // Migration: if every node has empty connections[], this is a pre-v2 export — auto-populate sequential connections
+      const allEmpty = route.nodes.every(n => !n.connections || n.connections.length === 0);
+      if (allEmpty && route.nodes.length > 1) {
+        for (let i = 0; i < route.nodes.length - 1; i++) {
+          route.nodes[i].connections.push(route.nodes[i+1].id);
+          route.nodes[i+1].connections.push(route.nodes[i].id);
+        }
+      }
       imported.push(route);
     });
     await Promise.all(promises);
