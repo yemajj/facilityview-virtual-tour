@@ -34,6 +34,7 @@
   .btn-icon-text { display:flex; align-items:center; gap:6px; padding:5px 12px; background:transparent; border:1px solid var(--border); border-radius:3px; color:var(--muted); font-family:var(--cond); font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; cursor:pointer; white-space:nowrap; flex-shrink:0; transition:all 0.15s; }
   .btn-icon-text:hover { border-color:var(--accent2); color:var(--accent2); background:rgba(0,200,255,0.05); }
   .btn-icon-text.accent:hover { border-color:var(--accent); color:var(--accent); background:rgba(240,165,0,0.05); }
+  .btn-icon-text.btn-danger:hover { border-color:#ff4444; color:#ff4444; background:rgba(255,68,68,0.07); }
   .btn-icon-text svg { width:12px; height:12px; fill:currentColor; }
   .header-right { display:flex; align-items:center; gap:10px; flex-shrink:0; }
   .status-dot { width:8px; height:8px; border-radius:50%; background:var(--success); box-shadow:0 0 8px var(--success); animation:pulse 2s ease-in-out infinite; }
@@ -342,6 +343,9 @@
     </button>
     <button class="btn-icon-text" id="btnDuplicateRoute" onclick="duplicateRoute()" title="Duplicate current route">
       <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>Duplicate
+    </button>
+    <button class="btn-icon-text btn-danger" id="btnDeleteRoute" onclick="deleteRoute()" title="Delete current route">
+      <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>Delete
     </button>
   </div>
   <div class="header-right">
@@ -809,6 +813,30 @@ function duplicateRoute() {
   rebuildRouteSelect();
   selectRoute(routes.length - 1);
   document.getElementById('welcome').classList.add('hidden');
+  saveRoutes();
+}
+function deleteRoute() {
+  if (!currentRoute()) { alert('No route selected.'); return; }
+  const name = currentRoute().name;
+  const nodeCount = currentNodes().length;
+  const msg = nodeCount
+    ? `Delete "${name}" and its ${nodeCount} node${nodeCount > 1 ? 's' : ''}? This cannot be undone.`
+    : `Delete "${name}"? This cannot be undone.`;
+  if (!confirm(msg)) return;
+  routes.splice(currentRouteIdx, 1);
+  // Select an adjacent route, or show empty state
+  const newIdx = Math.min(currentRouteIdx, routes.length - 1);
+  currentRouteIdx = -1;
+  currentNodeIdx = -1;
+  img = null;
+  rebuildRouteSelect();
+  if (routes.length > 0) {
+    selectRoute(newIdx);
+  } else {
+    document.getElementById('sidebarRouteBadge').textContent = 'NO ROUTE';
+    buildSidebar(); drawMinimap(); updateNodeCount(); clearViewer();
+    document.getElementById('welcome').classList.remove('hidden');
+  }
   saveRoutes();
 }
 function rebuildRouteSelect() {
