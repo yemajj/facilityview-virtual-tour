@@ -748,6 +748,9 @@ let settingsOpen = false;
 let pinchStartDist = 0;
 let pinchStartFov  = 75;
 
+// Compass rotation tracking (accumulated, unwrapped to avoid CSS transition spin-back)
+let lastCompassDeg = 0;
+
 // IndexedDB
 let db = null;
 
@@ -1199,6 +1202,17 @@ function navigateTo(index) {
     if (from && from.mapX !== null && to && to.mapX !== null)
       arrivalYaw = Math.atan2(to.mapX - from.mapX, -(to.mapY - from.mapY));
   }
+  // For the first node on initial load, face toward the first connected/next node
+  if (arrivalYaw === null && index === 0) {
+    const fromNode = nodes[0];
+    if (fromNode && fromNode.mapX !== null) {
+      const firstConnId = fromNode.connections && fromNode.connections[0];
+      const firstConn = firstConnId ? nodes.find(n => n.id === firstConnId) : null;
+      const nextNode = firstConn || (nodes.length > 1 ? nodes[1] : null);
+      if (nextNode && nextNode.mapX !== null)
+        arrivalYaw = Math.atan2(nextNode.mapX - fromNode.mapX, -(nextNode.mapY - fromNode.mapY));
+    }
+  }
 
   // Capture current frame to fadeCanvas for crossfade transition
   if (img) {
@@ -1347,7 +1361,13 @@ function updateHUD() {
     String(Math.round(heading)).padStart(3,'0') + '° / ' + (pitchDeg >= 0 ? '+' : '') + Math.round(pitchDeg) + '°';
   document.getElementById('infoFov').textContent = fov + '°';
   document.getElementById('fovLabel').textContent = 'FOV: ' + fov + '°';
-  document.getElementById('compassNeedle').style.transform = `translateX(-50%) translateY(-100%) rotate(${heading}deg)`;
+  // Unwrap compass rotation so CSS transition always takes the short arc (no spin-back at 0°/360°)
+  const rawHeading = heading;
+  let compassDelta = rawHeading - ((lastCompassDeg % 360) + 360) % 360;
+  if (compassDelta > 180) compassDelta -= 360;
+  if (compassDelta < -180) compassDelta += 360;
+  lastCompassDeg += compassDelta;
+  document.getElementById('compassNeedle').style.transform = `translateX(-50%) translateY(-100%) rotate(${lastCompassDeg}deg)`;
 }
 
 // ══════════════════════════════════════════════════
