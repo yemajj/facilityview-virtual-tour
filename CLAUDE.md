@@ -3,7 +3,7 @@
 ## Project Overview
 FacilityView is a single-file HTML/CSS/JS virtual tour simulator for facility worker training. Users upload equirectangular panorama images, link them into named routes, and navigate between them in a Google Street View-style viewer.
 
-**The entire app lives in one file:** `virtual-tour.html` (~2,904 lines)
+**The entire app lives in one file:** `virtual-tour.html` (~3,044 lines)
 
 ---
 
@@ -11,27 +11,27 @@ FacilityView is a single-file HTML/CSS/JS virtual tour simulator for facility wo
 
 | Lines | Content |
 |---|---|
-| 1–320 | `<head>`: CSS styles (incl. floor tabs) |
-| 320–596 | HTML: header, sidebar, viewer, map editor overlay (incl. floor tabs bar) |
-| 596–705 | HTML: modals (add route, add node, edit node with connections, hotspots, manage hotspots) |
-| 705–768 | `<script>` open + all JS global state declarations |
-| 768–795 | Helper functions: `currentRoute()`, `currentNodes()` |
-| 795–938 | Route management: `openNewRouteModal`, `confirmNewRoute`, `deleteRoute`, `duplicateRoute`, `rebuildRouteSelect`, `selectRoute` |
-| 938–1190 | Node management: `openRenameModal`, `refreshModalConnections`, `addConnectionFromModal`, `removeConnectionFromModal`, `removeAllConnectionsFromModal`, `confirmRenameNode`, `deleteNode`, `getThumbnail`, `buildSidebar`, `reorderNode` |
-| 1190–1262 | Navigation: `navigateTo`, `navigatePrev/Next`, `updateHeaders`, `updateRouteProgress` |
-| 1262–1356 | Canvas/rendering utils: `resizeCanvas`, `clearViewer`, `renderFrame`, `scheduleRender`, `updateHUD` |
-| 1356–1459 | Hotspot DOM: `buildHotspots`, `updateHotspotPositions` |
-| 1459–1631 | Minimap: `toggleMinimapMinimize`, `drawMinimap` |
-| 1631–2185 | Map editor: `openMapEditor`, `closeMapEditor`, undo/redo helpers, `setTool`, `buildEditorNodeList`, floor tab functions (`buildFloorTabs`, `switchFloor`, `addFloor`, `deleteFloor`, `startFloorRename`, `assignNodeFloor`), `removeConnection`, `removeAllConnections`, `drawMapEditor`, mouse/click handlers |
-| 2185–2311 | Floorplan upload: `clearFloorplan`, undo/redo keyboard listener |
-| 2311–2335 | View controls: `adjustFov`, `resetView`, `toggleFullscreen`, `openModal`, `closeModal` |
-| 2335–2398 | Demo panoramas: `makeSyntheticPanorama`, `loadDemo` |
-| 2398–2481 | IndexedDB: `openDB`, `saveRoutes`, `loadRoutes`, `flashSavedIndicator` |
-| 2481–2571 | Export/Import: `exportRoutes`, `importRoutes` |
-| 2571–2604 | Settings & inertia: `toggleSettings`, `updateSensitivity`, `startInertia` |
-| 2604–2782 | Custom hotspot CRUD: `toggleHotspotEditMode`, `canvasClickToYawPitch`, `openAddHotspotModal`, `confirmAddHotspot`, `deleteHotspot`, `openManageHotspotsModal`, `buildHotspotManageList`, `openEditHotspotModal`, `startRepositionHotspot`, `showHotspotInfo` |
-| 2782–2870 | WebGL init: `initWebGL` (shaders, texture setup, fallback) |
-| 2870–2904 | App init: `showLoader`, `hideLoader`, `init` |
+| 1–335 | `<head>`: CSS styles (incl. floor tabs, hotspot icon types, icon picker buttons) |
+| 335–610 | HTML: header, sidebar, viewer, map editor overlay (incl. floor tabs bar) |
+| 610–720 | HTML: modals (add route, add node, edit node with connections+nav arrow color, hotspots with icon/color picker, manage hotspots) |
+| 720–800 | `<script>` open + all JS global state declarations + `HOTSPOT_ICONS`/`HOTSPOT_ICON_DEFAULTS` constants |
+| 800–810 | Helper functions: `currentRoute()`, `currentNodes()` |
+| 810–960 | Route management: `openNewRouteModal`, `confirmNewRoute`, `deleteRoute`, `duplicateRoute`, `rebuildRouteSelect`, `selectRoute` |
+| 960–1210 | Node management: `openRenameModal`, `refreshModalConnections`, `addConnectionFromModal`, `removeConnectionFromModal`, `removeAllConnectionsFromModal`, `confirmRenameNode`, `deleteNode`, `getThumbnail`, `buildSidebar`, `reorderNode` |
+| 1210–1285 | Navigation: `navigateTo`, `navigatePrev/Next`, `updateHeaders`, `updateRouteProgress` |
+| 1285–1385 | Canvas/rendering utils: `resizeCanvas`, `clearViewer`, `renderFrame`, `scheduleRender`, `updateHUD` |
+| 1385–1490 | Hotspot DOM: `buildHotspots`, `updateHotspotPositions` |
+| 1490–1680 | Minimap: `toggleMinimapMinimize`, `drawMinimap` (incl. cross-floor ghost nodes) |
+| 1680–2250 | Map editor: `openMapEditor`, `closeMapEditor`, undo/redo helpers, `setTool`, `buildEditorNodeList`, floor tab functions, `removeConnection`, `removeAllConnections`, `drawMapEditor`, mouse/click handlers |
+| 2250–2380 | Floorplan upload: `clearFloorplan`, undo/redo keyboard listener |
+| 2380–2410 | View controls: `adjustFov`, `resetView`, `toggleFullscreen`, `openModal`, `closeModal` |
+| 2410–2480 | Demo panoramas: `makeSyntheticPanorama`, `loadDemo` |
+| 2480–2580 | IndexedDB: `openDB`, `saveRoutes`, `loadRoutes`, `flashSavedIndicator` |
+| 2580–2680 | Export/Import: `exportRoutes`, `importRoutes` |
+| 2680–2720 | Settings & inertia: `toggleSettings`, `updateSensitivity`, `startInertia` |
+| 2720–2950 | Custom hotspot CRUD: `toggleHotspotEditMode`, `canvasClickToYawPitch`, `openAddHotspotModal`, `updateHotspotTypeFields`, `selectHotspotIcon`, `resetHotspotColor`, `resetNavArrowColor`, `confirmAddHotspot`, `deleteHotspot`, `openManageHotspotsModal`, `buildHotspotManageList`, `openEditHotspotModal`, `startRepositionHotspot`, `showHotspotInfo` |
+| 2950–3020 | WebGL init: `initWebGL` (shaders, texture setup, fallback) |
+| 3020–3044 | App init: `showLoader`, `hideLoader`, `init` |
 
 ---
 
@@ -65,8 +65,9 @@ routes[] = [{
     thumbUrl,        // lazy-generated 96×60 thumbnail data URL (null if no image)
     mapX, mapY,      // 2D map position (null if unplaced)
     floorId,         // string floor ID (null = unassigned)
-    connections: [], // array of node IDs for explicit (non-linear) nav links — cross-floor allowed
-    hotspots: [{ id, type: 'info'|'link', yaw, pitch, label, content }]
+    connections: [], // array of node IDs for ALL nav links (bidirectional) — auto-populated on node creation; editable via Connect tool
+    navArrowColor: null, // hex string or null (default gold #f0a500) — set via Edit Node modal
+    hotspots: [{ id, type: 'info'|'link', icon: 'info'|'warning'|'danger'|'important'|'note'|'link', color: null|hexStr, yaw, pitch, label, content }]
   }]
 }]
 ```
@@ -109,6 +110,9 @@ routes[] = [{
 | `confirmRenameNode()` | Save name/desc edits from Edit Node modal |
 | `deleteNode(nodeIdx)` | Remove node, reassign IDs, update connections on other nodes |
 | `getThumbnail(node)` | Lazy-generate 96×60 center-crop thumbnail; cached as `node.thumbUrl` |
+| `selectHotspotIcon(icon)` | Highlight icon button in picker and update color input to that icon's default |
+| `resetHotspotColor()` | Reset color picker to the active icon's default color |
+| `resetNavArrowColor()` | Reset nav arrow color picker to default gold |
 | `toggleHotspotEditMode()` | Toggle crosshair cursor for hotspot placement |
 | `canvasClickToYawPitch(x, y)` | Convert canvas click → yaw/pitch coords |
 | `openManageHotspotsModal()` | Open hotspot list panel for current node |
@@ -184,6 +188,9 @@ settingsOpen            // true when settings panel is visible
 pinchStartDist          // pixel distance between fingers at pinch start
 pinchStartFov           // fov value at pinch start
 
+// Compass
+lastCompassDeg          // accumulated compass rotation (unwrapped) to prevent CSS spin-back at 0°/360°
+
 // WebGL
 gl, ctx                 // WebGL context (preferred) / 2D fallback context
 useWebGL                // true if WebGL initialized successfully
@@ -237,7 +244,7 @@ header
 ## Known Behaviors / Gotchas
 
 - **`clearViewer()` must not contain `clearViewer()`** — it was once replaced recursively by a bulk find-replace. The 2D branch must use `ctx.clearRect(...)` directly.
-- **`connections[]` is additive** — linear prev/next arrows always show; explicit connections add extras. They are NOT mutually exclusive.
+- **`connections[]` drives ALL navigation** — linear prev/next arrows are no longer hardcoded. New nodes auto-connect to the previous node; users can remove any connection via the Connect tool. On load, pre-v2 saves (all-empty connections) are migrated to sequential connections.
 - **Node IDs reassign on reorder/delete** — connections[] on other nodes are remapped by `reorderNode()` and `deleteNode()`. Hotspot `content` field (link type) references node IDs and may need manual fix after reorder (known limitation).
 - **WebGL crossfade** — requires `preserveDrawingBuffer: true` so `fadeCtx.drawImage(canvas)` can read the last WebGL frame.
 - **Non-POT textures** — WebGL 1 requires `CLAMP_TO_EDGE` for non-power-of-2 textures.
