@@ -350,6 +350,34 @@
   .floor-add-btn:hover { color:var(--accent); background:rgba(240,165,0,0.07); }
   .editor-node-floor { font-family:var(--mono); font-size:8px; color:var(--muted); letter-spacing:1px; flex-shrink:0; }
 
+  /* ── KIOSK MODE ── */
+  #kioskControls { display:none; position:absolute; bottom:0; left:0; right:0; flex-direction:column; z-index:100; pointer-events:all; }
+  body.kiosk-mode #kioskControls { display:flex; }
+  #kioskProgressBar { height:3px; background:var(--accent); width:0%; transition:none; flex-shrink:0; }
+  #kioskBar { display:flex; align-items:center; gap:14px; padding:10px 20px; background:rgba(13,15,18,0.9); border-top:1px solid var(--border); backdrop-filter:blur(8px); flex-wrap:wrap; }
+  #kioskBar label { font-family:var(--mono); font-size:10px; letter-spacing:1px; color:var(--text); display:flex; align-items:center; gap:6px; cursor:pointer; }
+  #kioskBar .kiosk-sep { flex:1; }
+  #kioskIntervalWrap { display:flex; align-items:center; gap:6px; font-family:var(--mono); font-size:10px; color:var(--muted); }
+  #kioskIntervalVal { min-width:28px; color:var(--accent); }
+  #btnExitKiosk { font-family:var(--cond); font-size:11px; font-weight:700; letter-spacing:1px; text-transform:uppercase; padding:5px 14px; background:transparent; border:1px solid var(--border); border-radius:3px; color:var(--muted); cursor:pointer; transition:all 0.15s; }
+  #btnExitKiosk:hover { border-color:#ff4444; color:#ff4444; }
+  body.kiosk-mode #btnNewRoute,
+  body.kiosk-mode #btnDuplicateRoute,
+  body.kiosk-mode #btnDeleteRoute,
+  body.kiosk-mode #btnHotspotEdit,
+  body.kiosk-mode #btnManageHotspots,
+  body.kiosk-mode #btnExport,
+  body.kiosk-mode #btnImport,
+  body.kiosk-mode #btnExportViewer,
+  body.kiosk-mode #btnKiosk,
+  body.kiosk-mode #savedIndicator,
+  body.kiosk-mode .status-dot,
+  body.kiosk-mode .status-label,
+  body.kiosk-mode .minimap-edit-btn,
+  body.kiosk-mode #mapEditorWrap,
+  body.kiosk-mode .sidebar-bottom,
+  body.kiosk-mode .loc-action-btn { display:none !important; }
+
   /* ── VIEWER MODE — hide all editing UI ── */
   body.viewer-mode #btnNewRoute,
   body.viewer-mode #btnDuplicateRoute,
@@ -359,6 +387,7 @@
   body.viewer-mode #btnExport,
   body.viewer-mode #btnImport,
   body.viewer-mode #btnExportViewer,
+  body.viewer-mode #btnKiosk,
   body.viewer-mode #savedIndicator,
   body.viewer-mode .status-dot,
   body.viewer-mode .status-label,
@@ -395,6 +424,10 @@
     </button>
   </div>
   <div class="header-right">
+    <button class="btn-icon-text" id="btnKiosk" onclick="enterKioskMode()" title="Kiosk / presentation mode — hides editing UI">
+      <svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>
+      Kiosk
+    </button>
     <button class="btn-icon-text" id="btnExportViewer" onclick="exportViewerPackage()" title="Export a self-contained viewer file for trainees">
       <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
       Viewer
@@ -546,6 +579,19 @@
       <div id="hotspotInfoTitle"></div>
       <div id="hotspotInfoText"></div>
       <button id="hotspotInfoClose" onclick="document.getElementById('hotspotInfoPopup').style.display='none'">Close</button>
+    </div>
+    <div id="kioskControls">
+      <div id="kioskProgressBar"></div>
+      <div id="kioskBar">
+        <label><input type="checkbox" id="kioskAutoToggle" onchange="setKioskAuto(this.checked)"> Auto-advance</label>
+        <div id="kioskIntervalWrap">
+          <span>Every</span>
+          <input type="range" id="kioskIntervalSlider" min="3" max="60" value="10" style="width:80px;" oninput="setKioskInterval(+this.value)">
+          <span id="kioskIntervalVal">10s</span>
+        </div>
+        <div class="kiosk-sep"></div>
+        <button id="btnExitKiosk" onclick="exitKioskMode()">✕ Exit Kiosk</button>
+      </div>
     </div>
     <div id="hotspotLightbox" onclick="closeLightbox()">
       <img id="lightboxImg" src="" alt="" onclick="event.stopPropagation()">
@@ -844,6 +890,13 @@ let pendingHotspotYaw = 0, pendingHotspotPitch = 0;
 let editingHotspotId = null;       // null = new, string = editing existing
 let repositioningHotspotId = null; // null = normal, string = reposition in progress
 let pendingHotspotFileData = null; // { dataUrl, filename } for image/file hotspots
+
+// Kiosk mode
+let kioskActive     = false;
+let kioskAuto       = false;
+let kioskIntervalSec = 10;
+let kioskTimerId    = null;
+let kioskElapsed    = 0;          // ms elapsed in current countdown
 
 // Settings & inertia
 let sensitivityLevel = 3;         // 1–10 slider value
@@ -1365,6 +1418,9 @@ function navigateTo(index) {
     if (fadeTimeout) { clearTimeout(fadeTimeout); fadeTimeout = null; }
     isFading = true;
   }
+
+  // Reset kiosk auto-advance timer on any navigation
+  if (kioskActive && kioskAuto) { stopKioskTimer(); startKioskTimer(); }
 
   currentNodeIdx = index;
   img = nodes[index].image;
@@ -2855,6 +2911,63 @@ function startInertia() {
   }
   inertiaId = requestAnimationFrame(tick);
 }
+// ══════════════════════════════════════════════════
+// KIOSK / PRESENTATION MODE
+// ══════════════════════════════════════════════════
+function enterKioskMode() {
+  kioskActive = true;
+  document.body.classList.add('kiosk-mode');
+  // Sync controls to current state
+  document.getElementById('kioskAutoToggle').checked = kioskAuto;
+  document.getElementById('kioskIntervalSlider').value = kioskIntervalSec;
+  document.getElementById('kioskIntervalVal').textContent = kioskIntervalSec + 's';
+  if (kioskAuto) startKioskTimer();
+}
+function exitKioskMode() {
+  kioskActive = false;
+  document.body.classList.remove('kiosk-mode');
+  stopKioskTimer();
+}
+function setKioskAuto(enabled) {
+  kioskAuto = enabled;
+  if (enabled) startKioskTimer(); else stopKioskTimer();
+}
+function setKioskInterval(val) {
+  kioskIntervalSec = val;
+  document.getElementById('kioskIntervalVal').textContent = val + 's';
+  if (kioskAuto) { stopKioskTimer(); startKioskTimer(); }
+}
+function startKioskTimer() {
+  stopKioskTimer();
+  kioskElapsed = 0;
+  const tick = 100; // ms per tick
+  const bar = document.getElementById('kioskProgressBar');
+  kioskTimerId = setInterval(() => {
+    kioskElapsed += tick;
+    const pct = Math.min(100, (kioskElapsed / (kioskIntervalSec * 1000)) * 100);
+    bar.style.width = pct + '%';
+    if (kioskElapsed >= kioskIntervalSec * 1000) {
+      kioskElapsed = 0;
+      bar.style.width = '0%';
+      const nodes = currentNodes();
+      if (nodes.length === 0) return;
+      // Advance to next node; loop back to first after last
+      const next = currentNodeIdx < nodes.length - 1 ? currentNodeIdx + 1 : 0;
+      navigateTo(next);
+    }
+  }, tick);
+}
+function stopKioskTimer() {
+  if (kioskTimerId) { clearInterval(kioskTimerId); kioskTimerId = null; }
+  const bar = document.getElementById('kioskProgressBar');
+  if (bar) bar.style.width = '0%';
+  kioskElapsed = 0;
+}
+// Escape key exits kiosk mode
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape' && kioskActive) exitKioskMode();
+});
+
 // Close settings panel when clicking outside
 document.addEventListener('mousedown', e => {
   if (!settingsOpen) return;
