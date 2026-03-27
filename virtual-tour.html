@@ -230,6 +230,22 @@
   #hotspotInfoClose { margin-top:12px; display:block; width:100%; padding:6px; background:transparent; border:1px solid var(--border); border-radius:3px; color:var(--muted); font-family:var(--cond); font-size:10px; cursor:pointer; text-transform:uppercase; letter-spacing:1px; transition:all 0.15s; }
   #hotspotInfoClose:hover { border-color:var(--accent2); color:var(--accent2); }
 
+  /* IMAGE LIGHTBOX */
+  #hotspotLightbox { display:none; position:absolute; inset:0; background:rgba(0,0,0,0.92); z-index:60; align-items:center; justify-content:center; flex-direction:column; gap:10px; cursor:pointer; }
+  #hotspotLightbox.open { display:flex; }
+  #lightboxImg { max-width:90%; max-height:80%; object-fit:contain; border:1px solid var(--border); cursor:default; }
+  #lightboxTitle { font-family:var(--cond); font-size:11px; letter-spacing:2px; color:var(--muted); text-transform:uppercase; }
+  #lightboxClose { position:absolute; top:14px; right:18px; background:none; border:1px solid var(--border); color:var(--muted); font-size:16px; width:32px; height:32px; border-radius:50%; cursor:pointer; display:flex; align-items:center; justify-content:center; transition:all 0.15s; }
+  #lightboxClose:hover { border-color:var(--accent2); color:var(--accent2); }
+
+  /* NEW HOTSPOT PIN TYPES */
+  .hotspot-pin.url-type      { background:rgba(77,184,255,0.15); border-color:#4db8ff; }
+  .hotspot-pin.url-type svg  { color:#4db8ff; }
+  .hotspot-pin.image-type    { background:rgba(136,204,68,0.15); border-color:#88cc44; }
+  .hotspot-pin.image-type svg { color:#88cc44; }
+  .hotspot-pin.file-type     { background:rgba(255,153,68,0.15); border-color:#ff9944; }
+  .hotspot-pin.file-type svg { color:#ff9944; }
+
   /* MODAL BASE */
   .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:200; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(4px); opacity:0; pointer-events:none; transition:opacity 0.2s; }
   .modal-bg.open { opacity:1; pointer-events:all; }
@@ -510,6 +526,11 @@
       <div id="hotspotInfoText"></div>
       <button id="hotspotInfoClose" onclick="document.getElementById('hotspotInfoPopup').style.display='none'">Close</button>
     </div>
+    <div id="hotspotLightbox" onclick="closeLightbox()">
+      <img id="lightboxImg" src="" alt="" onclick="event.stopPropagation()">
+      <div id="lightboxTitle"></div>
+      <button id="lightboxClose" onclick="closeLightbox()">✕</button>
+    </div>
     <div class="flash" id="flash"></div>
   </div>
 </div>
@@ -692,6 +713,9 @@
       <select id="hotspotType" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:var(--text);font-family:var(--sans);font-size:13px;padding:8px 10px;outline:none;transition:border-color 0.15s;">
         <option value="info">Info Marker</option>
         <option value="link">Node Link</option>
+        <option value="url">External URL</option>
+        <option value="image">Image Viewer</option>
+        <option value="file">Document / PDF</option>
       </select>
     </div>
     <div class="modal-field"><label>Label</label><input type="text" id="hotspotLabel" placeholder="e.g. Safety Exit" maxlength="40"></div>
@@ -699,6 +723,18 @@
     <div class="modal-field" id="hotspotLinkField" style="display:none">
       <label>Target Node</label>
       <select id="hotspotLinkTarget" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:var(--text);font-family:var(--sans);font-size:13px;padding:8px 10px;outline:none;"></select>
+    </div>
+    <div class="modal-field" id="hotspotUrlField" style="display:none">
+      <label>URL</label>
+      <input type="url" id="hotspotUrl" placeholder="https://example.com" style="width:100%;box-sizing:border-box;">
+    </div>
+    <div class="modal-field" id="hotspotFileField" style="display:none">
+      <label>File</label>
+      <button class="upload-btn" style="width:100%;border-style:solid;justify-content:flex-start;padding:8px 12px;" onclick="document.getElementById('hotspotFileInput').click()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM8 13h3v3h2v-3h3l-4-4-4 4z"/></svg>
+        <span id="hotspotFileLabel">Click to upload image or PDF</span>
+      </button>
+      <input type="file" id="hotspotFileInput" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx" style="display:none">
     </div>
     <div class="modal-field" id="hotspotIconField">
       <label>Icon</label>
@@ -717,6 +753,15 @@
         </button>
         <button class="hs-icon-btn" data-icon="note" onclick="selectHotspotIcon('note')" title="Note">
           <svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 9h-2V5h2v6zm0 4h-2v-2h2v2z"/></svg>
+        </button>
+        <button class="hs-icon-btn" data-icon="external" onclick="selectHotspotIcon('external')" title="External Link">
+          <svg viewBox="0 0 24 24"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>
+        </button>
+        <button class="hs-icon-btn" data-icon="image" onclick="selectHotspotIcon('image')" title="Image">
+          <svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>
+        </button>
+        <button class="hs-icon-btn" data-icon="document" onclick="selectHotspotIcon('document')" title="Document/PDF">
+          <svg viewBox="0 0 24 24"><path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z"/></svg>
         </button>
       </div>
     </div>
@@ -777,6 +822,7 @@ let hotspotEditMode = false;
 let pendingHotspotYaw = 0, pendingHotspotPitch = 0;
 let editingHotspotId = null;       // null = new, string = editing existing
 let repositioningHotspotId = null; // null = normal, string = reposition in progress
+let pendingHotspotFileData = null; // { dataUrl, filename } for image/file hotspots
 
 // Settings & inertia
 let sensitivityLevel = 3;         // 1–10 slider value
@@ -815,10 +861,14 @@ const HOTSPOT_ICONS = {
   danger:    `<svg viewBox="0 0 24 24"><path d="M12 2C6.47 2 2 6.47 2 12s4.47 10 10 10 10-4.47 10-10S17.53 2 12 2zm5 13.59L15.59 17 12 13.41 8.41 17 7 15.59 10.59 12 7 8.41 8.41 7 12 10.59 15.59 7 17 8.41 13.41 12 17 15.59z"/></svg>`,
   important: `<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/></svg>`,
   note:      `<svg viewBox="0 0 24 24"><path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-7 9h-2V5h2v6zm0 4h-2v-2h2v2z"/></svg>`,
-  link:      `<svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`
+  link:      `<svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`,
+  external:  `<svg viewBox="0 0 24 24"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>`,
+  image:     `<svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>`,
+  document:  `<svg viewBox="0 0 24 24"><path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z"/></svg>`
 };
 const HOTSPOT_ICON_DEFAULTS = {
-  info: '#00c8ff', warning: '#ffaa00', danger: '#ff3c3c', important: '#ff7800', note: '#a064ff', link: '#00e676'
+  info: '#00c8ff', warning: '#ffaa00', danger: '#ff3c3c', important: '#ff7800', note: '#a064ff', link: '#00e676',
+  external: '#4db8ff', image: '#88cc44', document: '#ff9944'
 };
 
 // ── helpers ──
@@ -1504,11 +1554,17 @@ function buildHotspots(index) {
       el.style.pointerEvents = 'all';
       if (hs.type === 'info') {
         el.addEventListener('click', () => showHotspotInfo(hs));
-      } else {
+      } else if (hs.type === 'link') {
         el.addEventListener('click', () => {
           const target = nodes.find(n => n.id === hs.content);
           if (target) navigateTo(nodes.indexOf(target));
         });
+      } else if (hs.type === 'url') {
+        el.addEventListener('click', () => { if (hs.content) window.open(hs.content, '_blank'); });
+      } else if (hs.type === 'image') {
+        el.addEventListener('click', () => showHotspotImage(hs));
+      } else if (hs.type === 'file') {
+        el.addEventListener('click', () => { if (hs.content) window.open(hs.content, '_blank'); });
       }
       el.addEventListener('contextmenu', e => {
         e.preventDefault();
@@ -2679,6 +2735,16 @@ document.getElementById('importInput').addEventListener('change', function() {
   if (this.files[0]) importRoutes(this.files[0]);
   this.value = '';
 });
+document.getElementById('hotspotFileInput').addEventListener('change', function() {
+  const file = this.files[0]; if (!file) return;
+  const reader = new FileReader();
+  reader.onload = ev => {
+    pendingHotspotFileData = { dataUrl: ev.target.result, filename: file.name };
+    document.getElementById('hotspotFileLabel').textContent = file.name;
+  };
+  reader.readAsDataURL(file);
+  this.value = '';
+});
 
 // ══════════════════════════════════════════════════
 // SETTINGS & INERTIA
@@ -2739,6 +2805,9 @@ function openAddHotspotModal(yawVal, pitchVal) {
   document.getElementById('hotspotLabel').value = '';
   document.getElementById('hotspotContent').value = '';
   document.getElementById('hotspotType').value = 'info';
+  document.getElementById('hotspotUrl').value = '';
+  document.getElementById('hotspotFileLabel').textContent = 'Click to upload image or PDF';
+  pendingHotspotFileData = null;
   selectHotspotIcon('info');
   document.getElementById('hotspotColor').value = HOTSPOT_ICON_DEFAULTS.info;
   document.getElementById('addHotspotSub').textContent =
@@ -2760,9 +2829,14 @@ function openAddHotspotModal(yawVal, pitchVal) {
 }
 function updateHotspotTypeFields() {
   const type = document.getElementById('hotspotType').value;
-  document.getElementById('hotspotContentField').style.display = type === 'info' ? '' : 'none';
-  document.getElementById('hotspotLinkField').style.display    = type === 'link' ? '' : 'none';
-  document.getElementById('hotspotIconField').style.display    = type === 'link' ? 'none' : '';
+  document.getElementById('hotspotContentField').style.display = type === 'info'  ? '' : 'none';
+  document.getElementById('hotspotLinkField').style.display    = type === 'link'  ? '' : 'none';
+  document.getElementById('hotspotUrlField').style.display     = type === 'url'   ? '' : 'none';
+  document.getElementById('hotspotFileField').style.display    = (type === 'image' || type === 'file') ? '' : 'none';
+  document.getElementById('hotspotIconField').style.display    = type === 'link'  ? 'none' : '';
+  // Auto-select the icon that matches the type when switching types
+  const typeIconMap = { url: 'external', image: 'image', file: 'document' };
+  if (typeIconMap[type]) selectHotspotIcon(typeIconMap[type]);
 }
 function selectHotspotIcon(icon) {
   document.querySelectorAll('.hs-icon-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.icon === icon));
@@ -2780,9 +2854,20 @@ function confirmAddHotspot() {
   const label = document.getElementById('hotspotLabel').value.trim();
   if (!label) { document.getElementById('hotspotLabel').focus(); return; }
   const type = document.getElementById('hotspotType').value;
-  const content = type === 'info'
-    ? document.getElementById('hotspotContent').value.trim()
-    : document.getElementById('hotspotLinkTarget').value;
+  let content = '', filename = null;
+  if (type === 'info')       content = document.getElementById('hotspotContent').value.trim();
+  else if (type === 'link')  content = document.getElementById('hotspotLinkTarget').value;
+  else if (type === 'url')   content = document.getElementById('hotspotUrl').value.trim();
+  else if (type === 'image' || type === 'file') {
+    if (pendingHotspotFileData) { content = pendingHotspotFileData.dataUrl; filename = pendingHotspotFileData.filename; }
+    else if (editingHotspotId) {
+      // Keep existing file if no new one was uploaded
+      const existingHs = (currentNodes()[currentNodeIdx]?.hotspots || []).find(h => h.id === editingHotspotId);
+      if (existingHs) { content = existingHs.content; filename = existingHs.filename || null; }
+    }
+  }
+  if ((type === 'url') && !content) { document.getElementById('hotspotUrl').focus(); return; }
+  if ((type === 'image' || type === 'file') && !content) { alert('Please upload a file.'); return; }
   const activeIconBtn = document.querySelector('.hs-icon-btn.active');
   const icon = activeIconBtn ? activeIconBtn.dataset.icon : (type === 'link' ? 'link' : 'info');
   const pickedColor = document.getElementById('hotspotColor').value;
@@ -2793,14 +2878,15 @@ function confirmAddHotspot() {
   node.hotspots = node.hotspots || [];
   if (editingHotspotId) {
     const hs = node.hotspots.find(h => h.id === editingHotspotId);
-    if (hs) { hs.type = type; hs.icon = icon; hs.color = color; hs.label = label; hs.content = content; }
+    if (hs) { hs.type = type; hs.icon = icon; hs.color = color; hs.label = label; hs.content = content; hs.filename = filename; }
     editingHotspotId = null;
     closeModal('modalAddHotspot');
     buildHotspots(currentNodeIdx);
     saveRoutes();
     openManageHotspotsModal();
   } else {
-    node.hotspots.push({ id: 'HS' + Date.now(), type, icon, color, yaw: pendingHotspotYaw, pitch: pendingHotspotPitch, label, content });
+    node.hotspots.push({ id: 'HS' + Date.now(), type, icon, color, filename, yaw: pendingHotspotYaw, pitch: pendingHotspotPitch, label, content });
+    pendingHotspotFileData = null;
     closeModal('modalAddHotspot');
     buildHotspots(currentNodeIdx);
     saveRoutes();
@@ -2842,7 +2928,12 @@ function buildHotspotManageList() {
     const listIcon = listIconSvg.replace('<svg ', `<svg width="14" height="14" fill="${listPinColor}" style="flex-shrink:0" `);
     const badgeColor = hs.type === 'info' ? 'rgba(0,200,255,0.12)' : 'rgba(0,230,118,0.12)';
     const badgeText = hs.type === 'info' ? 'var(--accent2)' : 'var(--success)';
-    const previewText = hs.type === 'info' ? (hs.content || '—') : ('→ ' + (currentNodes().find(n => n.id === hs.content) || {name: hs.content}).name);
+    const previewText = hs.type === 'info'   ? (hs.content || '—')
+      : hs.type === 'link'   ? ('→ ' + (currentNodes().find(n => n.id === hs.content) || {name: hs.content}).name)
+      : hs.type === 'url'    ? (hs.content || '—')
+      : hs.type === 'image'  ? ('🖼 ' + (hs.filename || 'Image'))
+      : hs.type === 'file'   ? ('📄 ' + (hs.filename || 'Document'))
+      : '—';
     row.innerHTML = `
       ${listIcon}
       <div style="flex:1;min-width:0;">
@@ -2881,7 +2972,15 @@ function openEditHotspotModal(hsId) {
   document.getElementById('hotspotLabel').value = hs.label;
   document.getElementById('hotspotContent').value = hs.type === 'info' ? (hs.content || '') : '';
   document.getElementById('hotspotType').value = hs.type;
-  const editIcon = hs.icon || (hs.type === 'link' ? 'link' : 'info');
+  document.getElementById('hotspotUrl').value = hs.type === 'url' ? (hs.content || '') : '';
+  if (hs.type === 'image' || hs.type === 'file') {
+    pendingHotspotFileData = hs.content ? { dataUrl: hs.content, filename: hs.filename || 'file' } : null;
+    document.getElementById('hotspotFileLabel').textContent = hs.filename || (hs.content ? 'File attached — click to replace' : 'Click to upload image or PDF');
+  } else {
+    pendingHotspotFileData = null;
+    document.getElementById('hotspotFileLabel').textContent = 'Click to upload image or PDF';
+  }
+  const editIcon = hs.icon || (hs.type === 'link' ? 'link' : hs.type === 'url' ? 'external' : hs.type === 'image' ? 'image' : hs.type === 'file' ? 'document' : 'info');
   selectHotspotIcon(editIcon);
   document.getElementById('hotspotColor').value = hs.color || HOTSPOT_ICON_DEFAULTS[editIcon] || '#00c8ff';
   // populate link target select and pre-select current target
@@ -2914,6 +3013,15 @@ function showHotspotInfo(hs) {
   document.getElementById('hotspotInfoTitle').textContent = hs.label;
   document.getElementById('hotspotInfoText').textContent  = hs.content;
   document.getElementById('hotspotInfoPopup').style.display = 'block';
+}
+function showHotspotImage(hs) {
+  document.getElementById('lightboxImg').src = hs.content || '';
+  document.getElementById('lightboxTitle').textContent = hs.label + (hs.filename ? ' — ' + hs.filename : '');
+  document.getElementById('hotspotLightbox').classList.add('open');
+}
+function closeLightbox() {
+  document.getElementById('hotspotLightbox').classList.remove('open');
+  document.getElementById('lightboxImg').src = '';
 }
 
 // ══════════════════════════════════════════════════
