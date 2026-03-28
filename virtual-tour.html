@@ -402,6 +402,19 @@
   .quiz-score-row.unanswered .quiz-score-result { color:var(--muted); }
   .quiz-score-question { font-size:10px; color:var(--muted); padding:2px 8px 6px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 
+  /* ── SESSION LOG Modal ── */
+  .slog-row { display:flex; align-items:center; gap:10px; padding:5px 8px; border-radius:3px; border-bottom:1px solid var(--border); }
+  .slog-row:last-child { border-bottom:none; }
+  .slog-row:nth-child(even) { background:rgba(255,255,255,0.03); }
+  .slog-time  { color:var(--muted); width:70px; flex-shrink:0; font-size:10px; }
+  .slog-type  { width:44px; flex-shrink:0; font-size:9px; letter-spacing:1px; text-transform:uppercase; font-weight:700; }
+  .slog-type.visit { color:var(--accent2); }
+  .slog-type.quiz  { color:var(--accent); }
+  .slog-node  { flex:1; color:var(--text); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .slog-result { flex-shrink:0; font-size:11px; font-weight:700; }
+  .slog-result.correct { color:var(--success); }
+  .slog-result.wrong   { color:var(--danger); }
+
   /* ── QUIZ EDITOR in Edit Node modal ── */
   .quiz-option-row { display:flex; align-items:center; gap:8px; }
   .quiz-option-row .quiz-letter { font-family:var(--mono); font-size:10px; color:var(--muted); width:14px; flex-shrink:0; }
@@ -474,6 +487,10 @@
     <button class="btn-icon-text" id="btnQuizResults" onclick="showQuizScore()" style="display:none" title="View quiz results for this session">
       <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
       Results
+    </button>
+    <button class="btn-icon-text" id="btnSessionLog" onclick="openSessionLog()" style="display:none" title="View training session log">
+      <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM8 13h3v3h2v-3h3l-4-4-4 4z"/></svg>
+      Session Log
     </button>
     <button class="btn-icon-text" id="btnKiosk" onclick="enterKioskMode()" title="Kiosk / presentation mode — hides editing UI">
       <svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>
@@ -962,6 +979,24 @@
   </div>
 </div>
 
+<div class="modal-bg" id="modalSessionLog">
+  <div class="modal" style="min-width:400px;max-width:640px;width:92%">
+    <div class="modal-title">Training Session Log</div>
+    <div class="modal-sub" id="sessionLogMeta">— No session data —</div>
+    <div id="sessionLogTabs" style="display:flex;gap:6px;margin-bottom:12px;">
+      <button class="modal-btn-cancel" id="tabAll"   onclick="filterSessionLog('all')"   style="padding:4px 12px;font-size:10px;">All</button>
+      <button class="modal-btn-cancel" id="tabVisit" onclick="filterSessionLog('visit')" style="padding:4px 12px;font-size:10px;">Visits</button>
+      <button class="modal-btn-cancel" id="tabQuiz"  onclick="filterSessionLog('quiz')"  style="padding:4px 12px;font-size:10px;">Quiz</button>
+    </div>
+    <div id="sessionLogTable" style="max-height:360px;overflow-y:auto;font-family:var(--mono);font-size:11px;padding-right:4px;"></div>
+    <div class="modal-actions">
+      <button class="modal-btn-cancel" onclick="clearSessionLog()">Clear Log</button>
+      <button class="modal-btn-cancel" onclick="closeModal('modalSessionLog')">Close</button>
+      <button class="modal-btn-ok" onclick="exportSessionLogCSV()">Export CSV</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════
 // STATE
@@ -1008,6 +1043,10 @@ let kioskElapsed    = 0;          // ms elapsed in current countdown
 // Quiz session state
 let quizAnswered = {};         // nodeId → { selectedIdx, correct, correctIdx }
 let quizResultsShown = false;  // prevent auto-showing score modal more than once per session
+
+// Training session log
+let sessionLog = [];           // { type, nodeId, nodeName, routeId, routeName, timestamp, ...quizFields }
+let sessionStartTime = null;   // ISO string — set on first navigateTo() call
 
 // Settings & inertia
 let sensitivityLevel = 3;         // 1–10 slider value
@@ -1171,6 +1210,8 @@ function selectRoute(idx) {
   // Reset quiz session for new route
   quizAnswered = {}; quizResultsShown = false;
   document.getElementById('btnQuizResults').style.display = 'none';
+  sessionLog = []; sessionStartTime = null;
+  document.getElementById('btnSessionLog').style.display = 'none';
   const route = currentRoute();
   document.getElementById('sidebarRouteBadge').textContent = route ? route.name : 'NO ROUTE';
   document.getElementById('routeSelect').value = idx;
@@ -1577,6 +1618,10 @@ function navigateTo(index) {
   if (kioskActive && kioskAuto) { stopKioskTimer(); startKioskTimer(); }
 
   currentNodeIdx = index;
+  // Training session log: record visit
+  if (!sessionStartTime) sessionStartTime = new Date().toISOString();
+  sessionLog.push({ type: 'visit', nodeId: nodes[index].id, nodeName: nodes[index].name, routeId: currentRoute()?.id || '', routeName: currentRoute()?.name || '', timestamp: new Date().toISOString() });
+  document.getElementById('btnSessionLog').style.display = '';
   img = nodes[index].image;
   document.getElementById('overlay').style.opacity = '1';
   const flash = document.getElementById('flash');
@@ -3193,6 +3238,8 @@ function submitQuizAnswer(node, selectedIdx) {
   const q = node.quiz;
   const correct = selectedIdx === q.correctIndex;
   quizAnswered[node.id] = { selectedIdx, correct, correctIdx: q.correctIndex };
+  // Training session log: record quiz answer
+  sessionLog.push({ type: 'quiz', nodeId: node.id, nodeName: node.name, routeId: currentRoute()?.id || '', routeName: currentRoute()?.name || '', timestamp: new Date().toISOString(), quizCorrect: correct, quizSelectedIdx: selectedIdx, quizCorrectIdx: q.correctIndex, quizQuestion: q.question, quizAnswerText: q.options[selectedIdx], quizCorrectText: q.options[q.correctIndex] });
 
   // Disable all buttons and highlight correct / wrong
   const btns = document.querySelectorAll('.quiz-opt-btn');
@@ -3287,6 +3334,77 @@ function toggleQuizEditor() {
       document.getElementById('quizExplText').value = node.quiz.explanation || '';
     }
   }
+}
+
+// ══════════════════════════════════════════════════
+// TRAINING SESSION LOG
+// ══════════════════════════════════════════════════
+function openSessionLog() {
+  buildSessionLogTable('all');
+  openModal('modalSessionLog');
+}
+
+function buildSessionLogTable(filter) {
+  const meta  = document.getElementById('sessionLogMeta');
+  const table = document.getElementById('sessionLogTable');
+  if (!sessionLog.length) {
+    meta.textContent = 'No events recorded yet.';
+    table.innerHTML = '';
+    return;
+  }
+  const visits  = sessionLog.filter(e => e.type === 'visit');
+  const quizzes = sessionLog.filter(e => e.type === 'quiz');
+  const correct = quizzes.filter(e => e.quizCorrect).length;
+  const startFmt = sessionStartTime ? new Date(sessionStartTime).toLocaleTimeString() : '—';
+  meta.textContent = `Started: ${startFmt}  ·  ${visits.length} visits  ·  ${correct}/${quizzes.length} quiz correct`;
+  const entries = filter === 'visit' ? visits : filter === 'quiz' ? quizzes : sessionLog;
+  if (!entries.length) {
+    table.innerHTML = `<div style="padding:16px;color:var(--muted);text-align:center;">No ${filter} events.</div>`;
+    return;
+  }
+  table.innerHTML = entries.map(e => {
+    const timeStr = new Date(e.timestamp).toLocaleTimeString();
+    const resultHtml = e.type === 'quiz'
+      ? `<span class="slog-result ${e.quizCorrect ? 'correct' : 'wrong'}">${e.quizCorrect ? '✓' : '✗'}</span>`
+      : '';
+    const detail = e.type === 'quiz'
+      ? ` <span style="color:var(--muted);font-size:9px;"> · ${e.quizAnswerText}</span>`
+      : '';
+    return `<div class="slog-row"><span class="slog-time">${timeStr}</span><span class="slog-type ${e.type}">${e.type}</span><span class="slog-node">${e.nodeName}${detail}</span>${resultHtml}</div>`;
+  }).join('');
+}
+
+function filterSessionLog(filter) {
+  ['all','visit','quiz'].forEach(t => {
+    const btn = document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1));
+    if (btn) btn.style.borderColor = t === filter ? 'var(--accent)' : '';
+  });
+  buildSessionLogTable(filter);
+}
+
+function clearSessionLog() {
+  if (!confirm('Clear the current session log?')) return;
+  sessionLog = []; sessionStartTime = null;
+  document.getElementById('btnSessionLog').style.display = 'none';
+  closeModal('modalSessionLog');
+}
+
+function exportSessionLogCSV() {
+  if (!sessionLog.length) { alert('No session data to export.'); return; }
+  const headers = ['Timestamp','Route','Node ID','Node Name','Event Type','Quiz Correct','Answer Given','Correct Answer','Question'];
+  const rows = sessionLog.map(e => [
+    e.timestamp, e.routeName, e.nodeId, e.nodeName, e.type,
+    e.type === 'quiz' ? (e.quizCorrect ? 'TRUE' : 'FALSE') : '',
+    e.type === 'quiz' ? (e.quizAnswerText  || '') : '',
+    e.type === 'quiz' ? (e.quizCorrectText || '') : '',
+    e.type === 'quiz' ? (e.quizQuestion    || '') : ''
+  ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+  const csv  = [headers.join(','), ...rows].join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv' });
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href = url; a.download = `session-log-${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
 }
 
 // Close settings panel when clicking outside
