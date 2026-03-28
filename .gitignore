@@ -9,3 +9,4 @@ desktop.ini
 
 # Claude Code plans (local only)
 .claude/
+node_modules/
