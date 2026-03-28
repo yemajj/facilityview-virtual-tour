@@ -180,8 +180,20 @@
   /* FADE CANVAS (crossfade between nodes) */
   #fadeCanvas { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; opacity:0; transition:opacity 0.35s ease; display:block; }
 
-  /* SAVED INDICATOR */
-  #savedIndicator { font-family:var(--mono); font-size:9px; color:var(--success); letter-spacing:2px; opacity:0; transition:opacity 0.2s; pointer-events:none; }
+  /* QUIZ BADGE on sidebar nodes */
+  .loc-quiz-badge { font-family:var(--mono); font-size:8px; font-weight:700; letter-spacing:1px; color:#000; background:var(--accent); border-radius:2px; padding:1px 5px; flex-shrink:0; }
+
+  /* HELP OVERLAY */
+  #helpOverlay .modal { max-width:520px; width:92%; }
+  .help-table { width:100%; border-collapse:collapse; font-size:11px; }
+  .help-table th { font-family:var(--mono); font-size:9px; letter-spacing:2px; color:var(--muted); text-transform:uppercase; padding:4px 8px 8px; text-align:left; border-bottom:1px solid var(--border); }
+  .help-table td { padding:5px 8px; vertical-align:top; }
+  .help-table td:first-child { font-family:var(--mono); font-size:10px; color:var(--accent); white-space:nowrap; padding-right:16px; }
+  .help-table tr:nth-child(even) td { background:rgba(255,255,255,0.02); }
+  .help-section { font-family:var(--mono); font-size:9px; color:var(--muted); letter-spacing:2px; text-transform:uppercase; margin:12px 0 4px; padding-top:8px; border-top:1px solid var(--border); }
+
+  /* SAVED INDICATOR — toast style */
+  #savedIndicator { font-family:var(--mono); font-size:9px; color:#000; background:var(--success); letter-spacing:2px; border-radius:3px; padding:2px 8px; opacity:0; transition:opacity 0.25s; pointer-events:none; }
   #savedIndicator.visible { opacity:1; }
 
   /* SETTINGS PANEL */
@@ -201,8 +213,8 @@
   .btn-icon-text.hotspot-edit-active { border-color:var(--accent2) !important; color:var(--accent2) !important; background:rgba(0,200,255,0.1) !important; }
 
   /* CUSTOM HOTSPOTS */
-  .hotspot-custom { position:absolute; pointer-events:all; cursor:pointer; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; gap:4px; }
-  .hotspot-pin { width:34px; height:34px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid; transition:all 0.2s; }
+  .hotspot-custom { position:absolute; pointer-events:all; cursor:pointer; transform:translate(-50%,-50%); display:flex; flex-direction:column; align-items:center; gap:4px; min-width:44px; min-height:44px; justify-content:center; }
+  .hotspot-pin { width:38px; height:38px; border-radius:50%; display:flex; align-items:center; justify-content:center; border:2px solid; transition:all 0.2s; }
   .hotspot-pin.info-type { background:rgba(0,200,255,0.15); border-color:var(--accent2); }
   .hotspot-pin.link-type { background:rgba(0,230,118,0.15); border-color:var(--success); }
   .hotspot-custom:hover .hotspot-pin { box-shadow:0 0 16px rgba(0,200,255,0.4); }
@@ -638,6 +650,10 @@
         </button>
         <div class="ctrl-sep"></div>
         <div class="ctrl-fov" id="fovLabel">FOV: 75°</div>
+        <div class="ctrl-sep"></div>
+        <button class="ctrl-btn" title="Keyboard shortcuts (?)" onclick="openModal('helpOverlay')">
+          <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>
+        </button>
       </div>
       <div class="drag-hint">◀  DRAG TO LOOK AROUND  ▶</div>
     </div>
@@ -768,7 +784,7 @@
   <div class="modal" style="min-width:320px;max-width:400px;width:90%">
     <div class="modal-title">New Route</div>
     <div class="modal-sub">Define a new navigation route for your facility tour.</div>
-    <div class="modal-field"><label>Route Name</label><input type="text" id="newRouteName" placeholder="e.g. Warehouse Entry to Dock" maxlength="48"></div>
+    <div class="modal-field"><label>Route Name <span style="color:var(--danger)">*</span></label><input type="text" id="newRouteName" placeholder="e.g. Warehouse Entry to Dock" maxlength="48"></div>
     <div class="modal-field"><label>Description (optional)</label><input type="text" id="newRouteDesc" placeholder="e.g. Main floor walkthrough" maxlength="80"></div>
     <div class="modal-actions">
       <button class="modal-btn-cancel" onclick="closeModal('modalNewRoute')">Cancel</button>
@@ -781,7 +797,7 @@
   <div class="modal" style="min-width:320px;max-width:400px;width:90%">
     <div class="modal-title">Add Node</div>
     <div class="modal-sub" id="addNodeModalSub">Adding node to route.</div>
-    <div class="modal-field"><label>Node Name</label><input type="text" id="newNodeName" placeholder="e.g. Entrance Lobby" maxlength="40"></div>
+    <div class="modal-field"><label>Node Name <span style="color:var(--danger)">*</span></label><input type="text" id="newNodeName" placeholder="e.g. Entrance Lobby" maxlength="40"></div>
     <div class="modal-field"><label>Description (optional)</label><input type="text" id="newNodeDesc" placeholder="e.g. Main entry point" maxlength="60"></div>
     <div class="modal-field">
       <label>Panorama Image</label>
@@ -979,6 +995,36 @@
   </div>
 </div>
 
+<div class="modal-bg" id="helpOverlay">
+  <div class="modal" style="min-width:360px;max-width:520px;width:92%">
+    <div class="modal-title">Keyboard Shortcuts</div>
+    <table class="help-table">
+      <tr><th>Key</th><th>Action</th></tr>
+      <tr><td>S</td><td>Toggle sidebar</td></tr>
+      <tr><td>Arrow keys</td><td>Pan view (left / right / up / down)</td></tr>
+      <tr><td>+ / -</td><td>Zoom in / out</td></tr>
+      <tr><td>R</td><td>Reset view</td></tr>
+      <tr><td>F</td><td>Toggle fullscreen</td></tr>
+      <tr><td>Esc</td><td>Close modal / exit kiosk mode</td></tr>
+      <tr><td>?</td><td>Show this help</td></tr>
+    </table>
+    <div class="help-section">Map Editor</div>
+    <table class="help-table">
+      <tr><th>Key</th><th>Action</th></tr>
+      <tr><td>Ctrl+Z</td><td>Undo node placement / move / connection</td></tr>
+      <tr><td>Ctrl+Y</td><td>Redo</td></tr>
+    </table>
+    <div class="help-section">Quiz</div>
+    <table class="help-table">
+      <tr><th>Key</th><th>Action</th></tr>
+      <tr><td>A / B / C / D</td><td>Select quiz answer option</td></tr>
+    </table>
+    <div class="modal-actions">
+      <button class="modal-btn-ok" onclick="closeModal('helpOverlay')">Close</button>
+    </div>
+  </div>
+</div>
+
 <div class="modal-bg" id="modalSessionLog">
   <div class="modal" style="min-width:400px;max-width:640px;width:92%">
     <div class="modal-title">Training Session Log</div>
@@ -1116,6 +1162,11 @@ function toggleSidebar() {
 window.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if ((e.key === 's' || e.key === 'S') && !mapEditorOpen) toggleSidebar();
+  if (e.key === '?' || e.key === '/') { e.preventDefault(); openModal('helpOverlay'); }
+  if (e.key === 'Escape' && !kioskActive) {
+    document.querySelectorAll('.modal-bg.open').forEach(m => m.classList.remove('open'));
+    if (settingsOpen) toggleSettings();
+  }
 });
 
 // ══════════════════════════════════════════════════
@@ -1248,6 +1299,12 @@ document.getElementById('fileInput').addEventListener('change', e => {
         pendingNodeImage = image;
         document.getElementById('nodeFileLabel').textContent = file.name;
         document.getElementById('confirmNodeBtn').disabled = false;
+      };
+      image.onerror = () => {
+        pendingNodeImage = null;
+        document.getElementById('nodeFileLabel').textContent = 'Choose image file...';
+        document.getElementById('confirmNodeBtn').disabled = true;
+        alert('Failed to load image. The file may be corrupt or unsupported.');
       };
       image.src = ev.target.result;
     };
@@ -1413,6 +1470,7 @@ document.getElementById('nodeImageInput').addEventListener('change', e => {
       buildSidebar();
       saveRoutes();
     };
+    image.onerror = () => { alert('Failed to load image. The file may be corrupt or unsupported.'); };
     image.src = ev.target.result;
   };
   reader.readAsDataURL(file);
@@ -1461,9 +1519,24 @@ function confirmRenameNode() {
 }
 function deleteNode(nodeIdx) {
   const nodes = currentNodes();
+  if (nodeIdx < 0 || nodeIdx >= nodes.length) return;  // bounds guard
   if (!confirm(`Delete Node ${String(nodeIdx+1).padStart(2,'0')}: "${nodes[nodeIdx].name}"?`)) return;
+  const deletedId = nodes[nodeIdx].id;
   nodes.splice(nodeIdx, 1);
-  nodes.forEach((n, i) => n.id = 'N' + String(i+1).padStart(2,'0'));
+  // Reassign sequential IDs and build old→new map
+  const oldIds = nodes.map((n, i) => { const old = n.id; n.id = 'N' + String(i+1).padStart(2,'0'); return { old, newId: n.id }; });
+  const idMap = {};
+  oldIds.forEach(({ old, newId }) => { idMap[old] = newId; });
+  // Remove deleted ID and remap remaining IDs in connections[]
+  nodes.forEach(n => {
+    n.connections = (n.connections || []).filter(id => id !== deletedId).map(id => idMap[id] || id);
+  });
+  // Remap hotspot link targets
+  nodes.forEach(n => {
+    (n.hotspots || []).forEach(h => {
+      if (h.type === 'link' && h.content !== deletedId && idMap[h.content]) h.content = idMap[h.content];
+    });
+  });
   buildSidebar(); rebuildRouteSelect(); drawMinimap(); updateNodeCount();
   if (mapEditorOpen) { buildEditorNodeList(); drawMapEditor(); }
   if (!nodes.length) {
@@ -1522,6 +1595,7 @@ function buildSidebar() {
         <div class="loc-name">${node.name}</div>
         ${node.desc ? `<div class="loc-desc">${node.desc}</div>` : ''}
       </div>
+      ${node.quiz ? `<span class="loc-quiz-badge" title="Quiz question at this node">Q</span>` : ''}
       <div class="loc-actions">
         <button class="loc-action-btn" title="Rename" onclick="event.stopPropagation();openRenameModal(${i})">
           <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
@@ -1567,6 +1641,10 @@ function reorderNode(fromIdx, toIdx) {
   oldIds.forEach(({ old, newId }) => { idMap[old] = newId; });
   // Update connections[] on every node to use new IDs
   nodes.forEach(n => { if (n.connections) n.connections = n.connections.map(cid => idMap[cid] || cid); });
+  // Remap hotspot link targets to new IDs
+  nodes.forEach(n => {
+    (n.hotspots || []).forEach(h => { if (h.type === 'link' && idMap[h.content]) h.content = idMap[h.content]; });
+  });
   // Keep currentNodeIdx pointing at the same node
   if (activeNode) currentNodeIdx = nodes.indexOf(activeNode);
   buildSidebar();
@@ -1956,7 +2034,7 @@ function drawMinimap() {
       if (nodes.indexOf(target) <= i) return;
       const [ax, ay] = toMM(node.mapX, node.mapY);
       const [bx, by] = toMM(target.mapX, target.mapY);
-      mctx.strokeStyle = 'rgba(0,200,255,0.35)';
+      mctx.strokeStyle = 'rgba(0,200,255,0.6)';
       mctx.lineWidth = 1.5;
       mctx.beginPath(); mctx.moveTo(ax, ay); mctx.lineTo(bx, by); mctx.stroke();
     });
@@ -2552,7 +2630,8 @@ mapEdCanvas.addEventListener('mousedown', e => {
       pushUndo();
       nodes[mapSelectedNodeIdx].mapX = Math.round(mx);
       nodes[mapSelectedNodeIdx].mapY = Math.round(my);
-      if (nodes[mapSelectedNodeIdx].floorId === null) nodes[mapSelectedNodeIdx].floorId = mapCurrentFloorId;
+      const _floorExists = (currentRoute()?.floors || []).some(f => f.id === mapCurrentFloorId);
+      if (nodes[mapSelectedNodeIdx].floorId === null && _floorExists) nodes[mapSelectedNodeIdx].floorId = mapCurrentFloorId;
       buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor();
       saveRoutes();
       if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
@@ -2613,6 +2692,7 @@ document.getElementById('floorplanInput').addEventListener('change', e => {
         saveRoutes();
       }
     };
+    image.onerror = () => { alert('Failed to load floor plan image. The file may be corrupt or unsupported.'); };
     image.src = ev.target.result;
   };
   reader.readAsDataURL(file);
@@ -3027,10 +3107,13 @@ function exportRoutes() {
 }
 async function importRoutes(file) {
   if (!file) return;
+  const importInput = document.getElementById('importInput');
+  if (importInput) importInput.disabled = true;
   showLoader('Importing routes...');
   try {
     const text = await file.text();
-    const data = JSON.parse(text);
+    let data;
+    try { data = JSON.parse(text); } catch { throw new Error('Invalid JSON — the file may be corrupt or not a FacilityView export.'); }
     if (!data.routes || !Array.isArray(data.routes)) throw new Error('Invalid file format — missing routes array.');
     const promises = [];
     const imported = [];
@@ -3083,10 +3166,13 @@ async function importRoutes(file) {
       document.getElementById('welcome').classList.add('hidden');
     }
     hideLoader();
-    alert(`Imported ${imported.length} route(s) with ${imported.reduce((s, r) => s + r.nodes.length, 0)} total nodes.`);
+    const names = imported.map(r => `  • ${r.name} (${r.nodes.length} node${r.nodes.length !== 1 ? 's' : ''})`).join('\n');
+    alert(`Imported ${imported.length} route(s):\n${names}`);
   } catch (e) {
     hideLoader();
     alert('Import failed: ' + e.message);
+  } finally {
+    if (importInput) importInput.disabled = false;
   }
 }
 document.getElementById('importInput').addEventListener('change', function() {
@@ -3095,6 +3181,14 @@ document.getElementById('importInput').addEventListener('change', function() {
 });
 document.getElementById('hotspotFileInput').addEventListener('change', function() {
   const file = this.files[0]; if (!file) return;
+  // Runtime MIME validation (accept attribute covers UI picker, this covers drag-drop/etc.)
+  const allowedTypes = ['image/', 'application/pdf', 'application/msword',
+    'application/vnd.openxmlformats-officedocument', 'application/vnd.ms-'];
+  if (file.type && !allowedTypes.some(t => file.type.startsWith(t))) {
+    alert('Unsupported file type. Please upload an image or document (PDF, Word, Excel, PowerPoint).');
+    this.value = '';
+    return;
+  }
   const reader = new FileReader();
   reader.onload = ev => {
     pendingHotspotFileData = { dataUrl: ev.target.result, filename: file.name };
@@ -3232,10 +3326,21 @@ function showQuizQuestion(node) {
   fb.className = '';
   document.getElementById('quizContinueBtn').style.display = 'none';
   document.getElementById('quizOverlay').style.display = 'flex';
+  // Keyboard A/B/C/D shortcut handler
+  if (window._quizKeyHandler) document.removeEventListener('keydown', window._quizKeyHandler);
+  window._quizKeyHandler = e => {
+    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+    const idx = ['a','b','c','d'].indexOf(e.key.toLowerCase());
+    if (idx >= 0 && idx < q.options.length && !quizAnswered[node.id]) {
+      submitQuizAnswer(node, idx);
+    }
+  };
+  document.addEventListener('keydown', window._quizKeyHandler);
 }
 
 function submitQuizAnswer(node, selectedIdx) {
   const q = node.quiz;
+  if (!q || selectedIdx < 0 || selectedIdx >= q.options.length) return;
   const correct = selectedIdx === q.correctIndex;
   quizAnswered[node.id] = { selectedIdx, correct, correctIdx: q.correctIndex };
   // Training session log: record quiz answer
@@ -3265,6 +3370,7 @@ function submitQuizAnswer(node, selectedIdx) {
 }
 
 function closeQuizOverlay() {
+  if (window._quizKeyHandler) { document.removeEventListener('keydown', window._quizKeyHandler); window._quizKeyHandler = null; }
   document.getElementById('quizOverlay').style.display = 'none';
   // Show score if at last node and results not yet shown
   const nodes = currentNodes();
@@ -3432,7 +3538,7 @@ function canvasClickToYawPitch(clientX, clientY) {
   const halfFovV = halfFovH / (W / H);
   return {
     yaw:   yaw   + (px / W - 0.5) * 2 * halfFovH,
-    pitch: Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch - (py / H - 0.5) * 2 * halfFovV))
+    pitch: Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, pitch - (py / H - 0.5) * 2 * halfFovV))
   };
 }
 function openAddHotspotModal(yawVal, pitchVal) {
