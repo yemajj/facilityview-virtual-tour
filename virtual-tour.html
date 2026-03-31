@@ -1557,6 +1557,10 @@ function confirmRenameNode() {
         correctIndex: parseInt(document.getElementById('quizCorrectSelect').value) || 0,
         explanation: document.getElementById('quizExplText').value.trim()
       };
+    } else if (qText || opts.some(o => o)) {
+      // Partially filled quiz — warn the user instead of silently discarding
+      alert('Quiz not saved: please fill in the question and all 4 answer options, or clear all fields to remove the quiz.');
+      return;
     } else {
       node.quiz = null;
     }
