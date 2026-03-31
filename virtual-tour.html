@@ -98,7 +98,7 @@
   .loc-display { position:absolute; top:22px; left:50%; transform:translateX(-50%); text-align:center; pointer-events:none; }
   .loc-display-node { font-family:var(--mono); font-size:10px; color:var(--accent); letter-spacing:3px; text-transform:uppercase; margin-bottom:2px; }
   .loc-display-name { font-family:var(--cond); font-size:20px; font-weight:700; letter-spacing:4px; text-transform:uppercase; color:#fff; text-shadow:0 0 20px rgba(240,165,0,0.5); }
-  .loc-display-sub { font-family:var(--mono); font-size:9px; color:rgba(255,255,255,0.4); letter-spacing:2px; margin-top:2px; }
+  .loc-display-sub { font-family:var(--mono); font-size:9px; color:rgba(255,255,255,0.65); letter-spacing:2px; margin-top:2px; }
   .compass { position:absolute; top:20px; right:20px; width:60px; height:60px; pointer-events:none; }
   .compass-ring { position:absolute; inset:0; border:1px solid rgba(240,165,0,0.3); border-radius:50%; }
   .compass-inner { position:absolute; inset:8px; border:1px solid rgba(240,165,0,0.12); border-radius:50%; }
@@ -142,7 +142,7 @@
 
   /* CONTROLS */
   .controls-bar { position:absolute; bottom:24px; left:50%; transform:translateX(-50%); display:flex; align-items:center; gap:8px; pointer-events:all; }
-  .ctrl-btn { width:38px; height:38px; background:rgba(13,15,18,0.85); border:1px solid var(--border); border-radius:4px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.15s; color:var(--muted); backdrop-filter:blur(8px); }
+  .ctrl-btn { width:44px; height:44px; background:rgba(13,15,18,0.85); border:1px solid var(--border); border-radius:4px; display:flex; align-items:center; justify-content:center; cursor:pointer; transition:all 0.15s; color:var(--muted); backdrop-filter:blur(8px); }
   .ctrl-btn:hover { border-color:var(--accent); color:var(--accent); background:rgba(240,165,0,0.1); }
   .ctrl-btn svg { width:17px; height:17px; fill:currentColor; }
   .ctrl-sep { width:1px; height:26px; background:var(--border); }
@@ -193,8 +193,9 @@
   .help-section { font-family:var(--mono); font-size:9px; color:var(--muted); letter-spacing:2px; text-transform:uppercase; margin:12px 0 4px; padding-top:8px; border-top:1px solid var(--border); }
 
   /* SAVED INDICATOR — toast style */
-  #savedIndicator { font-family:var(--mono); font-size:9px; color:#000; background:var(--success); letter-spacing:2px; border-radius:3px; padding:2px 8px; opacity:0; transition:opacity 0.25s; pointer-events:none; }
-  #savedIndicator.visible { opacity:1; }
+  #savedIndicator { font-family:var(--mono); font-size:9px; color:#000; background:var(--success); letter-spacing:2px; border-radius:3px; padding:2px 8px; opacity:0; transition:opacity 0.3s; pointer-events:none; }
+  #savedIndicator.visible { opacity:1; animation:saved-pop 0.3s ease; }
+  @keyframes saved-pop { 0%{transform:scale(0.8)} 50%{transform:scale(1.1)} 100%{transform:scale(1)} }
 
   /* SETTINGS PANEL */
   #settingsPanel { display:none; position:fixed; top:52px; right:16px; background:var(--panel); border:1px solid var(--border); border-top:3px solid var(--accent); z-index:150; padding:16px 20px; min-width:240px; }
@@ -268,7 +269,8 @@
   .modal-field { margin-bottom:14px; }
   .modal-field label { display:block; font-family:var(--mono); font-size:9px; letter-spacing:2px; color:var(--muted); text-transform:uppercase; margin-bottom:6px; }
   .modal-field input { width:100%; background:var(--bg); border:1px solid var(--border); border-radius:3px; color:var(--text); font-family:var(--sans); font-size:13px; padding:8px 10px; outline:none; transition:border-color 0.15s; }
-  .modal-field input:focus { border-color:var(--accent); }
+  .modal-field input:focus { border-color:var(--accent); box-shadow:0 0 0 2px rgba(240,165,0,0.25); }
+  *:focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
   .modal-actions { display:flex; gap:10px; justify-content:flex-end; margin-top:18px; }
   .modal-btn-cancel { padding:8px 18px; background:transparent; border:1px solid var(--border); border-radius:3px; color:var(--muted); font-family:var(--cond); font-size:12px; font-weight:700; letter-spacing:1px; text-transform:uppercase; cursor:pointer; transition:all 0.15s; }
   .modal-btn-cancel:hover { color:var(--text); }
@@ -467,6 +469,40 @@
   body.viewer-mode #mapEditorWrap,
   body.viewer-mode .sidebar-bottom,
   body.viewer-mode .loc-action-btn { display:none !important; }
+
+  /* ── RESPONSIVE DESIGN ── */
+  @media (max-width: 768px) {
+    :root { --sidebar-w: 200px; }
+    header { padding:0 8px; gap:6px; height:42px; flex-wrap:wrap; }
+    .logo { font-size:14px; letter-spacing:2px; }
+    .header-right { gap:4px; overflow-x:auto; }
+    .btn-icon-text { padding:4px 8px; font-size:10px; }
+    .btn-icon-text svg { width:10px; height:10px; }
+    .sidebar { width:var(--sidebar-w); }
+    .modal { padding:18px 16px; }
+    .modal { max-width:95vw !important; min-width:0 !important; }
+    .minimap { width:200px; right:8px; bottom:60px; }
+    #minimapCanvas { width:200px; height:160px; }
+    .info-panel { display:none; }
+    .route-nav { bottom:60px; }
+    .controls-bar { bottom:14px; }
+    .ctrl-btn { width:34px; height:34px; }
+    #settingsPanel { right:4px; min-width:200px; }
+  }
+  @media (max-width: 480px) {
+    :root { --sidebar-w: 100vw; }
+    .sidebar { position:fixed; z-index:90; height:calc(100vh - 42px); top:42px; }
+    .sidebar.collapsed { width:0; }
+    header { height:42px; }
+    .logo { display:none; }
+    .route-selector-wrap { max-width:200px; }
+    .minimap { width:150px; }
+    #minimapCanvas { width:150px; height:120px; }
+    .route-nav-btn { padding:6px 10px; font-size:10px; }
+    .welcome h1 { font-size:22px; letter-spacing:4px; }
+    .welcome p { font-size:9px; }
+    .welcome-actions { flex-direction:column; align-items:center; }
+  }
 </style>
 </head>
 <body>
@@ -544,6 +580,9 @@
     <div class="sidebar-header">
       <span class="sidebar-title">Nodes</span>
       <span class="sidebar-route-badge" id="sidebarRouteBadge">NO ROUTE</span>
+    </div>
+    <div style="padding:4px 10px;border-bottom:1px solid var(--border);">
+      <input type="text" id="sidebarSearch" placeholder="Filter nodes..." style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:10px;padding:5px 8px;outline:none;letter-spacing:1px;" oninput="filterSidebarNodes(this.value)">
     </div>
     <div class="location-list" id="locationList">
       <div style="padding:20px 14px;font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.8;letter-spacing:1px;">
@@ -684,7 +723,7 @@
     </div>
 
     <!-- QUIZ OVERLAY -->
-    <div id="quizOverlay">
+    <div id="quizOverlay" role="dialog" aria-modal="true" aria-label="Quiz Question">
       <div id="quizCard">
         <div id="quizHeader">
           <div id="quizBadge">QUIZ</div>
@@ -780,9 +819,9 @@
 </div>
 
 <!-- MODALS -->
-<div class="modal-bg" id="modalNewRoute">
+<div class="modal-bg" id="modalNewRoute" role="dialog" aria-modal="true" aria-labelledby="modalNewRouteTitle">
   <div class="modal" style="min-width:320px;max-width:400px;width:90%">
-    <div class="modal-title">New Route</div>
+    <div class="modal-title" id="modalNewRouteTitle">New Route</div>
     <div class="modal-sub">Define a new navigation route for your facility tour.</div>
     <div class="modal-field"><label>Route Name <span style="color:var(--danger)">*</span></label><input type="text" id="newRouteName" placeholder="e.g. Warehouse Entry to Dock" maxlength="48"></div>
     <div class="modal-field"><label>Description (optional)</label><input type="text" id="newRouteDesc" placeholder="e.g. Main floor walkthrough" maxlength="80"></div>
@@ -793,7 +832,7 @@
   </div>
 </div>
 
-<div class="modal-bg" id="modalAddNode">
+<div class="modal-bg" id="modalAddNode" role="dialog" aria-modal="true" aria-label="Add Node">
   <div class="modal" style="min-width:320px;max-width:400px;width:90%">
     <div class="modal-title">Add Node</div>
     <div class="modal-sub" id="addNodeModalSub">Adding node to route.</div>
@@ -813,7 +852,7 @@
   </div>
 </div>
 
-<div class="modal-bg" id="modalRenameNode">
+<div class="modal-bg" id="modalRenameNode" role="dialog" aria-modal="true" aria-label="Edit Node">
   <div class="modal" style="min-width:300px;max-width:400px;width:90%">
     <div class="modal-title">Edit Node</div>
     <div class="modal-sub" id="renameNodeSub">Update node name, description, and panorama.</div>
@@ -895,7 +934,7 @@
   </div>
 </div>
 
-<div class="modal-bg" id="modalAddHotspot">
+<div class="modal-bg" id="modalAddHotspot" role="dialog" aria-modal="true" aria-label="Add Hotspot">
   <div class="modal" style="min-width:320px;max-width:420px;width:90%">
     <div class="modal-title">Add Hotspot</div>
     <div class="modal-sub" id="addHotspotSub">Place an info marker or navigation link.</div>
@@ -967,7 +1006,7 @@
   </div>
 </div>
 
-<div class="modal-bg" id="modalManageHotspots">
+<div class="modal-bg" id="modalManageHotspots" role="dialog" aria-modal="true" aria-label="Manage Hotspots">
   <div class="modal" style="min-width:360px;max-width:500px;width:90%">
     <div class="modal-title">Hotspots</div>
     <div class="modal-sub">Node: <span id="manageHotspotNodeName">—</span></div>
@@ -979,7 +1018,7 @@
   </div>
 </div>
 
-<div class="modal-bg" id="modalQuizScore">
+<div class="modal-bg" id="modalQuizScore" role="dialog" aria-modal="true" aria-label="Quiz Results">
   <div class="modal" style="min-width:340px;max-width:460px;width:90%">
     <div class="modal-title">Quiz Results</div>
     <div class="modal-sub" id="quizScoreRoute">—</div>
@@ -995,7 +1034,7 @@
   </div>
 </div>
 
-<div class="modal-bg" id="helpOverlay">
+<div class="modal-bg" id="helpOverlay" role="dialog" aria-modal="true" aria-label="Keyboard Shortcuts">
   <div class="modal" style="min-width:360px;max-width:520px;width:92%">
     <div class="modal-title">Keyboard Shortcuts</div>
     <table class="help-table">
@@ -1007,6 +1046,8 @@
       <tr><td>F</td><td>Toggle fullscreen</td></tr>
       <tr><td>Esc</td><td>Close modal / exit kiosk mode</td></tr>
       <tr><td>?</td><td>Show this help</td></tr>
+      <tr><td>Scroll wheel</td><td>Zoom in / out</td></tr>
+      <tr><td>Drag image</td><td>Drop panorama onto current node</td></tr>
     </table>
     <div class="help-section">Map Editor</div>
     <table class="help-table">
@@ -1025,7 +1066,7 @@
   </div>
 </div>
 
-<div class="modal-bg" id="modalSessionLog">
+<div class="modal-bg" id="modalSessionLog" role="dialog" aria-modal="true" aria-label="Training Session Log">
   <div class="modal" style="min-width:400px;max-width:640px;width:92%">
     <div class="modal-title">Training Session Log</div>
     <div class="modal-sub" id="sessionLogMeta">— No session data —</div>
@@ -1148,6 +1189,10 @@ const HOTSPOT_ICON_DEFAULTS = {
 // ── helpers ──
 function currentRoute() { return routes[currentRouteIdx] || null; }
 function currentNodes() { const r = currentRoute(); return r ? r.nodes : []; }
+function escapeHtml(str) { const d = document.createElement('div'); d.textContent = str; return d.innerHTML; }
+function isSafeUrl(url) { try { const u = new URL(url, location.href); return ['http:','https:'].includes(u.protocol); } catch { return false; } }
+function isSafeImageSrc(src) { if (!src) return false; if (src.startsWith('data:image/')) return true; return isSafeUrl(src); }
+function uid(prefix) { return prefix + (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID().slice(0,8) : Date.now().toString(36) + Math.random().toString(36).slice(2,8)); }
 
 // ══════════════════════════════════════════════════
 // SIDEBAR TOGGLE
@@ -1182,7 +1227,7 @@ function openNewRouteModal() {
 function confirmNewRoute() {
   const name = document.getElementById('newRouteName').value.trim();
   if (!name) { document.getElementById('newRouteName').focus(); return; }
-  const route = { id:'R'+Date.now(), name, desc:document.getElementById('newRouteDesc').value.trim(), nodes:[], floors:[{id:'F0',name:'Floor 1',image:null}] };
+  const route = { id:uid('R'), name, desc:document.getElementById('newRouteDesc').value.trim(), nodes:[], floors:[{id:'F0',name:'Floor 1',image:null}] };
   routes.push(route);
   closeModal('modalNewRoute');
   rebuildRouteSelect();
@@ -1194,7 +1239,7 @@ function duplicateRoute() {
   const src = currentRoute();
   if (!src) { alert('Select a route to duplicate.'); return; }
   const copy = {
-    id: 'R' + Date.now(),
+    id: uid('R'),
     name: src.name + ' (copy)',
     desc: src.desc,
     floors: (src.floors || []).map(f => ({ id: f.id, name: f.name, image: f.image })),
@@ -1260,9 +1305,13 @@ function selectRoute(idx) {
   currentRouteIdx = idx; currentNodeIdx = -1; img = null;
   // Reset quiz session for new route
   quizAnswered = {}; quizResultsShown = false;
+  if (window._quizKeyHandler) { document.removeEventListener('keydown', window._quizKeyHandler); window._quizKeyHandler = null; }
+  document.getElementById('quizOverlay').style.display = 'none';
   document.getElementById('btnQuizResults').style.display = 'none';
   sessionLog = []; sessionStartTime = null;
   document.getElementById('btnSessionLog').style.display = 'none';
+  // Reset map editor state if switching route while editor closed
+  mapSelectedNodeIdx = -1; mapConnectFirstNodeIdx = -1;
   const route = currentRoute();
   document.getElementById('sidebarRouteBadge').textContent = route ? route.name : 'NO ROUTE';
   document.getElementById('routeSelect').value = idx;
@@ -1308,6 +1357,7 @@ document.getElementById('fileInput').addEventListener('change', e => {
       };
       image.src = ev.target.result;
     };
+    reader.onerror = () => { alert('Failed to read file.'); };
     reader.readAsDataURL(file);
   }
   e.target.value = '';
@@ -1457,10 +1507,12 @@ function removeAllConnectionsFromModal() {
 }
 document.getElementById('nodeImageInput').addEventListener('change', e => {
   const file = e.target.files[0]; if (!file) return;
+  if (file.size > 5 * 1024 * 1024) showLoader('Loading panorama...');
   const reader = new FileReader();
   reader.onload = ev => {
     const image = new Image();
     image.onload = () => {
+      hideLoader();
       const node = currentNodes()[renameTargetIdx]; if (!node) return;
       node.image = image;
       node.thumbUrl = null; // reset cached thumbnail
@@ -1470,9 +1522,10 @@ document.getElementById('nodeImageInput').addEventListener('change', e => {
       buildSidebar();
       saveRoutes();
     };
-    image.onerror = () => { alert('Failed to load image. The file may be corrupt or unsupported.'); };
+    image.onerror = () => { hideLoader(); alert('Failed to load image. The file may be corrupt or unsupported.'); };
     image.src = ev.target.result;
   };
+  reader.onerror = () => { hideLoader(); alert('Failed to read file.'); };
   reader.readAsDataURL(file);
   e.target.value = '';
 });
@@ -1531,10 +1584,11 @@ function deleteNode(nodeIdx) {
   nodes.forEach(n => {
     n.connections = (n.connections || []).filter(id => id !== deletedId).map(id => idMap[id] || id);
   });
-  // Remap hotspot link targets
+  // Remap hotspot link targets; remove links pointing at deleted node
   nodes.forEach(n => {
-    (n.hotspots || []).forEach(h => {
-      if (h.type === 'link' && h.content !== deletedId && idMap[h.content]) h.content = idMap[h.content];
+    n.hotspots = (n.hotspots || []).filter(h => !(h.type === 'link' && h.content === deletedId));
+    n.hotspots.forEach(h => {
+      if (h.type === 'link' && idMap[h.content]) h.content = idMap[h.content];
     });
   });
   buildSidebar(); rebuildRouteSelect(); drawMinimap(); updateNodeCount();
@@ -1547,6 +1601,35 @@ function deleteNode(nodeIdx) {
     navigateTo(Math.min(nodeIdx, nodes.length - 1));
   }
   saveRoutes();
+}
+function duplicateNode(nodeIdx) {
+  const nodes = currentNodes();
+  const src = nodes[nodeIdx]; if (!src) return;
+  const newId = 'N' + String(nodes.length + 1).padStart(2, '0');
+  const copy = {
+    id: newId, name: src.name + ' (copy)', desc: src.desc,
+    image: src.image, thumbUrl: src.thumbUrl || null,
+    mapX: src.mapX !== null ? src.mapX + 20 : null,
+    mapY: src.mapY !== null ? src.mapY + 20 : null,
+    floorId: src.floorId || null, connections: [],
+    hotspots: (src.hotspots || []).map(h => ({ ...h, id: 'HS' + Date.now() + Math.random().toString(36).slice(2,6) })),
+    navArrowColor: src.navArrowColor || null,
+    quiz: src.quiz ? { ...src.quiz, options: [...src.quiz.options] } : null
+  };
+  nodes.push(copy);
+  buildSidebar(); rebuildRouteSelect(); drawMinimap(); updateNodeCount();
+  if (mapEditorOpen) { buildEditorNodeList(); drawMapEditor(); }
+  navigateTo(nodes.length - 1);
+  saveRoutes();
+}
+function filterSidebarNodes(query) {
+  const q = query.toLowerCase().trim();
+  document.querySelectorAll('#locationList .loc-item').forEach(el => {
+    const name = (el.querySelector('.loc-name')?.textContent || '').toLowerCase();
+    const desc = (el.querySelector('.loc-desc')?.textContent || '').toLowerCase();
+    const id = (el.querySelector('.loc-node-num')?.textContent || '').toLowerCase();
+    el.style.display = (!q || name.includes(q) || desc.includes(q) || id.includes(q)) ? '' : 'none';
+  });
 }
 function updateNodeCount() {
   document.getElementById('nodeCountVal').textContent = currentNodes().length;
@@ -1599,6 +1682,9 @@ function buildSidebar() {
       <div class="loc-actions">
         <button class="loc-action-btn" title="Rename" onclick="event.stopPropagation();openRenameModal(${i})">
           <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+        </button>
+        <button class="loc-action-btn" title="Duplicate" onclick="event.stopPropagation();duplicateNode(${i})">
+          <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
         </button>
         <button class="loc-action-btn danger" title="Delete" onclick="event.stopPropagation();deleteNode(${i})">
           <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
@@ -1695,10 +1781,13 @@ function navigateTo(index) {
   // Reset kiosk auto-advance timer on any navigation
   if (kioskActive && kioskAuto) { stopKioskTimer(); startKioskTimer(); }
 
+  // Free 2D pixel cache from the previous node to avoid memory bloat
+  if (img && img._pixelCache) { img._pixelCache = null; }
   currentNodeIdx = index;
   // Training session log: record visit
   if (!sessionStartTime) sessionStartTime = new Date().toISOString();
   sessionLog.push({ type: 'visit', nodeId: nodes[index].id, nodeName: nodes[index].name, routeId: currentRoute()?.id || '', routeName: currentRoute()?.name || '', timestamp: new Date().toISOString() });
+  if (sessionLog.length > 5000) sessionLog = sessionLog.slice(-2500); // cap memory growth
   document.getElementById('btnSessionLog').style.display = '';
   img = nodes[index].image;
   document.getElementById('overlay').style.opacity = '1';
@@ -1817,7 +1906,7 @@ function renderFrame() {
     ctx.putImageData(imageData, 0, 0);
   }
   updateHUD(); updateHotspotPositions();
-  drawMinimap(); // live update for direction arrow
+  drawMinimap(true); // live update for direction arrow (lightweight)
 }
 function scheduleRender() {
   if (!renderPending) {
@@ -1883,7 +1972,9 @@ function buildHotspots(index) {
       arrowEl.querySelector('svg').style.fill = nodeColor;
     }
     el.style.pointerEvents = 'all';
+    el.tabIndex = 0; el.setAttribute('role', 'button'); el.setAttribute('aria-label', 'Navigate to ' + t.label);
     el.addEventListener('click', () => navigateTo(t.idx));
+    el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigateTo(t.idx); } });
     container.appendChild(el);
   });
   // Custom hotspots — rendered after nav hotspots
@@ -1912,6 +2003,7 @@ function buildHotspots(index) {
       labelEl.textContent = hs.label;
       el.appendChild(pinEl); el.appendChild(labelEl);
       el.style.pointerEvents = 'all';
+      el.tabIndex = 0; el.setAttribute('role', 'button'); el.setAttribute('aria-label', hs.label + ' (' + hs.type + ')');
       if (hs.type === 'info') {
         el.addEventListener('click', () => showHotspotInfo(hs));
       } else if (hs.type === 'link') {
@@ -1920,11 +2012,11 @@ function buildHotspots(index) {
           if (target) navigateTo(nodes.indexOf(target));
         });
       } else if (hs.type === 'url') {
-        el.addEventListener('click', () => { if (hs.content) window.open(hs.content, '_blank'); });
+        el.addEventListener('click', () => { if (hs.content && isSafeUrl(hs.content)) window.open(hs.content, '_blank'); });
       } else if (hs.type === 'image') {
         el.addEventListener('click', () => showHotspotImage(hs));
       } else if (hs.type === 'file') {
-        el.addEventListener('click', () => { if (hs.content) window.open(hs.content, '_blank'); });
+        el.addEventListener('click', () => { if (hs.content && (isSafeUrl(hs.content) || hs.content.startsWith('data:'))) window.open(hs.content, '_blank'); });
       }
       el.addEventListener('contextmenu', e => {
         e.preventDefault();
@@ -1938,21 +2030,26 @@ function buildHotspots(index) {
 function updateHotspotPositions() {
   const W = canvas.width, H = canvas.height;
   const fovRad = fov * Math.PI / 180;
+  const halfFov = fovRad / 2, halfFovV = halfFov / (W/H);
   document.querySelectorAll('.hotspot, .hotspot-custom').forEach(el => {
     const worldYaw = parseFloat(el.dataset.angle) || 0;
     const relYaw   = worldYaw - yaw;
     const normYaw  = ((relYaw + Math.PI) % (2*Math.PI) + 2*Math.PI) % (2*Math.PI) - Math.PI;
-    // Nav hotspots sit slightly below horizon; custom hotspots use their stored pitch
     const relPitch = el.classList.contains('hotspot-custom')
       ? (parseFloat(el.dataset.pitch) || 0) - pitch
       : -0.12 - pitch;
-    const halfFov  = fovRad / 2, halfFovV = halfFov / (W/H);
-    const px = W/2 + (normYaw / halfFov) * W/2;
-    const py = H/2 - (relPitch / halfFovV) * H/2;
     const visible = Math.abs(normYaw) < halfFov * 0.88 && Math.abs(relPitch) < halfFovV;
-    el.style.display  = visible ? 'flex' : 'none';
-    el.style.left = px + 'px'; el.style.top = py + 'px';
-    // Rotate nav arrow icon to point toward destination on screen
+    // Only update DOM when state changes
+    const wasVisible = el._hsVis;
+    if (visible !== wasVisible) {
+      el.style.display = visible ? 'flex' : 'none';
+      el._hsVis = visible;
+    }
+    if (!visible) return;
+    const pxVal = Math.round(W/2 + (normYaw / halfFov) * W/2);
+    const pyVal = Math.round(H/2 - (relPitch / halfFovV) * H/2);
+    if (el._hsX !== pxVal) { el.style.left = pxVal + 'px'; el._hsX = pxVal; }
+    if (el._hsY !== pyVal) { el.style.top = pyVal + 'px'; el._hsY = pyVal; }
     if (!el.classList.contains('hotspot-custom')) {
       const arrowEl = el.querySelector('.hotspot-arrow');
       if (arrowEl) arrowEl.style.transform = `rotate(${normYaw * (180 / Math.PI)}deg)`;
@@ -1969,20 +2066,63 @@ function toggleMinimapMinimize() {
   widget.classList.toggle('minimized');
   btn.textContent = widget.classList.contains('minimized') ? '▲' : '▼';
 }
-function drawMinimap() {
+let _minimapCache = null; // cached ImageData for static minimap content
+let _minimapCacheKey = ''; // key to detect when cache is stale
+let _minimapActiveCoords = null; // { x, y } of active node in minimap coords
+function drawMinimap(arrowOnly) {
   const W = 320, H = 260;
+
+  // Build a cache key from data that affects static layout
+  const allN = currentNodes();
+  const curN = allN[currentNodeIdx];
+  const cacheKey = (currentRouteIdx + '|' + currentNodeIdx + '|' + allN.length + '|' +
+    allN.map(n => n.id + n.mapX + n.mapY + n.floorId + (n.connections||[]).join(',')).join('|'));
+  const needFullRedraw = !arrowOnly || !_minimapCache || _minimapCacheKey !== cacheKey;
+
+  if (needFullRedraw) {
+    _minimapCacheKey = cacheKey;
+    _minimapActiveCoords = null;
+    _drawMinimapFull(W, H, allN, curN);
+    try { _minimapCache = mctx.getImageData(0, 0, W, H); } catch { _minimapCache = null; }
+    _drawMinimapArrow(W, H);
+    return;
+  }
+
+  // Fast path: restore cached static content and redraw only the arrow
+  if (_minimapCache) mctx.putImageData(_minimapCache, 0, 0);
+  _drawMinimapArrow(W, H);
+}
+function _drawMinimapArrow(W, H) {
+  if (!_minimapActiveCoords) return;
+  const { x, y } = _minimapActiveCoords;
+  const arrowLen = 14;
+  const arrowAng = yaw;
+  const ax2 = x + Math.sin(arrowAng) * arrowLen;
+  const ay2 = y - Math.cos(arrowAng) * arrowLen;
+  const halfFovRad = (fov / 2) * Math.PI / 180;
+  mctx.beginPath(); mctx.moveTo(x, y);
+  mctx.arc(x, y, arrowLen + 4, arrowAng - Math.PI/2 - halfFovRad, arrowAng - Math.PI/2 + halfFovRad);
+  mctx.closePath(); mctx.fillStyle = 'rgba(240,165,0,0.12)'; mctx.fill();
+  mctx.strokeStyle = 'rgba(240,165,0,0.3)'; mctx.lineWidth = 0.5; mctx.stroke();
+  mctx.beginPath(); mctx.moveTo(x, y); mctx.lineTo(ax2, ay2);
+  mctx.strokeStyle = '#f0a500'; mctx.lineWidth = 2; mctx.lineCap = 'round'; mctx.stroke(); mctx.lineCap = 'butt';
+  const headLen = 5; const headAng = Math.atan2(ay2 - y, ax2 - x);
+  mctx.beginPath(); mctx.moveTo(ax2, ay2);
+  mctx.lineTo(ax2 - headLen * Math.cos(headAng - 0.5), ay2 - headLen * Math.sin(headAng - 0.5));
+  mctx.lineTo(ax2 - headLen * Math.cos(headAng + 0.5), ay2 - headLen * Math.sin(headAng + 0.5));
+  mctx.closePath(); mctx.fillStyle = '#f0a500'; mctx.fill();
+}
+function _drawMinimapFull(W, H, allNodes, curNode) {
   mctx.clearRect(0, 0, W, H);
 
   // Background
   mctx.fillStyle = '#080a0d';
   mctx.fillRect(0, 0, W, H);
 
-  const allNodes = currentNodes();
   if (!allNodes.length) return;
 
   // Determine active floor from current node
   const route = currentRoute();
-  const curNode = allNodes[currentNodeIdx];
   const activeFloorId = curNode?.floorId || null;
   const activeFloor = (route?.floors || []).find(f => f.id === activeFloorId);
 
@@ -2083,40 +2223,8 @@ function drawMinimap() {
     mctx.strokeStyle = isActive ? '#f0a500' : isPast ? 'rgba(240,165,0,0.6)' : '#3a4a60';
     mctx.lineWidth = 1.5; mctx.stroke();
 
-    // ── LIVE VIEWING DIRECTION ARROW ──
-    if (isActive) {
-      const arrowLen = 14;
-      const arrowAng = yaw; // yaw directly maps to world direction
-      const ax2 = x + Math.sin(arrowAng) * arrowLen;
-      const ay2 = y - Math.cos(arrowAng) * arrowLen;
-
-      // FOV cone
-      const halfFovRad = (fov / 2) * Math.PI / 180;
-      mctx.beginPath();
-      mctx.moveTo(x, y);
-      mctx.arc(x, y, arrowLen + 4, arrowAng - Math.PI/2 - halfFovRad, arrowAng - Math.PI/2 + halfFovRad);
-      mctx.closePath();
-      mctx.fillStyle = 'rgba(240,165,0,0.12)';
-      mctx.fill();
-      mctx.strokeStyle = 'rgba(240,165,0,0.3)';
-      mctx.lineWidth = 0.5; mctx.stroke();
-
-      // Arrow shaft
-      mctx.beginPath();
-      mctx.moveTo(x, y); mctx.lineTo(ax2, ay2);
-      mctx.strokeStyle = '#f0a500'; mctx.lineWidth = 2;
-      mctx.lineCap = 'round'; mctx.stroke(); mctx.lineCap = 'butt';
-
-      // Arrowhead
-      const headLen = 5;
-      const headAng = Math.atan2(ay2 - y, ax2 - x);
-      mctx.beginPath();
-      mctx.moveTo(ax2, ay2);
-      mctx.lineTo(ax2 - headLen * Math.cos(headAng - 0.5), ay2 - headLen * Math.sin(headAng - 0.5));
-      mctx.lineTo(ax2 - headLen * Math.cos(headAng + 0.5), ay2 - headLen * Math.sin(headAng + 0.5));
-      mctx.closePath();
-      mctx.fillStyle = '#f0a500'; mctx.fill();
-    }
+    // Save active node coords for arrow overlay (drawn separately for performance)
+    if (isActive) { _minimapActiveCoords = { x, y }; }
 
     // Cross-floor indicator — drawn after node dot
     const hasCrossFloor = (node.connections || []).some(id => {
@@ -2172,6 +2280,7 @@ function openMapEditor() {
 function closeMapEditor() {
   document.getElementById('mapEditorBg').classList.remove('open');
   mapEditorOpen = false;
+  mapSelectedNodeIdx = -1; mapDraggingNodeIdx = -1; mapConnectFirstNodeIdx = -1;
   mapUndoStack = []; mapRedoStack = [];
   drawMinimap(); // refresh minimap with new positions
 }
@@ -2695,6 +2804,7 @@ document.getElementById('floorplanInput').addEventListener('change', e => {
     image.onerror = () => { alert('Failed to load floor plan image. The file may be corrupt or unsupported.'); };
     image.src = ev.target.result;
   };
+  reader.onerror = () => { alert('Failed to read floor plan file.'); };
   reader.readAsDataURL(file);
   e.target.value = '';
 });
@@ -2813,6 +2923,32 @@ window.addEventListener('touchend', e => {
   }
 });
 canvas.addEventListener('wheel', e => { e.preventDefault(); adjustFov(e.deltaY>0?5:-5); },{passive:false});
+
+// ── Drag-and-drop image upload onto viewer ──
+const viewerWrap = document.getElementById('viewerWrap');
+viewerWrap.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; });
+viewerWrap.addEventListener('drop', e => {
+  e.preventDefault();
+  const file = e.dataTransfer.files[0];
+  if (!file || !file.type.startsWith('image/')) return;
+  if (!currentRoute()) { alert('Create a route first.'); return; }
+  if (currentNodeIdx < 0) { alert('Add a node first.'); return; }
+  const node = currentNodes()[currentNodeIdx]; if (!node) return;
+  if (file.size > 5 * 1024 * 1024) showLoader('Loading panorama...');
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const image = new Image();
+    image.onload = () => {
+      hideLoader();
+      node.image = image; node.thumbUrl = null;
+      img = image; renderFrame(); buildSidebar(); saveRoutes();
+    };
+    image.onerror = () => { hideLoader(); alert('Failed to load image.'); };
+    image.src = ev.target.result;
+  };
+  reader.onerror = () => { hideLoader(); alert('Failed to read file.'); };
+  reader.readAsDataURL(file);
+});
 window.addEventListener('keydown', e => {
   if (e.target.tagName==='INPUT'||e.target.tagName==='TEXTAREA') return;
   if (!img||mapEditorOpen) return;
@@ -2899,11 +3035,19 @@ function loadDemo() {
   demoNodes.forEach((nd,i)=>{
     const dataUrl=makeSyntheticPanorama(nd.colors,nd.name);
     const image=new Image();
-    image.onload=()=>{
-      route.nodes.push({id:'N'+String(i+1).padStart(2,'0'),name:nd.name,desc:nd.desc,image,mapX:nd.mapX,mapY:nd.mapY,floorId:null,hotspots:[]});
+    const onDone=()=>{
+      route.nodes.push({id:'N'+String(i+1).padStart(2,'0'),name:nd.name,desc:nd.desc,image:image.complete&&image.naturalWidth?image:null,mapX:nd.mapX,mapY:nd.mapY,floorId:null,connections:[],hotspots:[]});
       loaded++;
-      if(loaded===demoNodes.length){buildSidebar();updateNodeCount();rebuildRouteSelect();navigateTo(0);saveRoutes();}
+      if(loaded===demoNodes.length){
+        // Sort by index to ensure insertion order
+        route.nodes.sort((a,b)=>a.id.localeCompare(b.id));
+        // Auto-connect sequentially
+        for(let j=0;j<route.nodes.length-1;j++){route.nodes[j].connections.push(route.nodes[j+1].id);route.nodes[j+1].connections.push(route.nodes[j].id);}
+        buildSidebar();updateNodeCount();rebuildRouteSelect();navigateTo(0);saveRoutes();
+      }
     };
+    image.onload=onDone;
+    image.onerror=onDone;
     image.src=dataUrl;
   });
 }
@@ -3115,16 +3259,24 @@ async function importRoutes(file) {
     let data;
     try { data = JSON.parse(text); } catch { throw new Error('Invalid JSON — the file may be corrupt or not a FacilityView export.'); }
     if (!data.routes || !Array.isArray(data.routes)) throw new Error('Invalid file format — missing routes array.');
+    data.routes.forEach((rd, ri) => {
+      if (!rd || typeof rd.name !== 'string') throw new Error(`Route ${ri + 1} is missing a name.`);
+      if (rd.nodes && !Array.isArray(rd.nodes)) throw new Error(`Route "${rd.name}" has invalid nodes.`);
+      (rd.nodes || []).forEach((nd, ni) => {
+        if (!nd || typeof nd.name !== 'string') throw new Error(`Node ${ni + 1} in route "${rd.name}" is missing a name.`);
+      });
+    });
     const promises = [];
     const imported = [];
+    let failedImageCount = 0;
     data.routes.forEach(rd => {
-      const route = { id: 'R' + Date.now() + Math.floor(Math.random() * 1000), name: rd.name, desc: rd.desc || '', nodes: [], floors: [] };
+      const route = { id: uid('R'), name: rd.name, desc: rd.desc || '', nodes: [], floors: [] };
       if (rd.floors && rd.floors.length) {
         rd.floors.forEach(f => {
           const fl = { id: f.id, name: f.name, image: null };
           if (f.imageSrc) {
             fl.image = new Image();
-            promises.push(new Promise(res => { fl.image.onload = fl.image.onerror = res; }));
+            promises.push(new Promise(res => { fl.image.onload = res; fl.image.onerror = () => { fl.image = null; failedImageCount++; res(); }; }));
             fl.image.src = f.imageSrc;
           }
           route.floors.push(fl);
@@ -3132,7 +3284,7 @@ async function importRoutes(file) {
       } else if (rd.floorplan) {
         // Old export format
         const fp = new Image();
-        promises.push(new Promise(res => { fp.onload = fp.onerror = res; }));
+        promises.push(new Promise(res => { fp.onload = res; fp.onerror = () => { failedImageCount++; res(); }; }));
         fp.src = rd.floorplan;
         route.floors.push({ id: 'F0', name: 'Floor 1', image: fp });
       } else {
@@ -3142,7 +3294,7 @@ async function importRoutes(file) {
         let image = null;
         if (nd.imageSrc) {
           image = new Image();
-          promises.push(new Promise(res => { image.onload = image.onerror = res; }));
+          promises.push(new Promise(res => { image.onload = res; image.onerror = () => { failedImageCount++; res(); }; }));
           image.src = nd.imageSrc;
         }
         route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, floorId: nd.floorId || null, connections: nd.connections || [], hotspots: nd.hotspots || [], navArrowColor: nd.navArrowColor || null, quiz: nd.quiz || null });
@@ -3167,7 +3319,8 @@ async function importRoutes(file) {
     }
     hideLoader();
     const names = imported.map(r => `  • ${r.name} (${r.nodes.length} node${r.nodes.length !== 1 ? 's' : ''})`).join('\n');
-    alert(`Imported ${imported.length} route(s):\n${names}`);
+    const failMsg = failedImageCount ? `\n\n⚠ ${failedImageCount} image(s) failed to load.` : '';
+    alert(`Imported ${imported.length} route(s):\n${names}${failMsg}`);
   } catch (e) {
     hideLoader();
     alert('Import failed: ' + e.message);
@@ -3257,7 +3410,7 @@ function startKioskTimer() {
   kioskTimerId = setInterval(() => {
     kioskElapsed += tick;
     const pct = Math.min(100, (kioskElapsed / (kioskIntervalSec * 1000)) * 100);
-    bar.style.width = pct + '%';
+    if (bar) bar.style.width = pct + '%';
     if (kioskElapsed >= kioskIntervalSec * 1000) {
       kioskElapsed = 0;
       bar.style.width = '0%';
@@ -3317,7 +3470,7 @@ function showQuizQuestion(node) {
   q.options.forEach((opt, i) => {
     const btn = document.createElement('button');
     btn.className = 'quiz-opt-btn';
-    btn.innerHTML = `<span class="quiz-opt-letter">${letters[i]}</span><span class="quiz-opt-text">${opt}</span>`;
+    btn.innerHTML = `<span class="quiz-opt-letter">${letters[i]}</span><span class="quiz-opt-text">${escapeHtml(opt)}</span>`;
     btn.addEventListener('click', () => submitQuizAnswer(node, i));
     optsEl.appendChild(btn);
   });
@@ -3360,8 +3513,8 @@ function submitQuizAnswer(node, selectedIdx) {
   fb.style.display = '';
   fb.className = correct ? 'quiz-feedback-correct' : 'quiz-feedback-wrong';
   fb.innerHTML = correct
-    ? `<span class="quiz-fb-icon">✓</span> <strong>Correct!</strong>${q.explanation ? ' ' + q.explanation : ''}`
-    : `<span class="quiz-fb-icon">✗</span> <strong>Incorrect.</strong> The correct answer was <strong>${letters[q.correctIndex]}: ${q.options[q.correctIndex]}</strong>.${q.explanation ? ' ' + q.explanation : ''}`;
+    ? `<span class="quiz-fb-icon">✓</span> <strong>Correct!</strong>${q.explanation ? ' ' + escapeHtml(q.explanation) : ''}`
+    : `<span class="quiz-fb-icon">✗</span> <strong>Incorrect.</strong> The correct answer was <strong>${escapeHtml(letters[q.correctIndex] + ': ' + q.options[q.correctIndex])}</strong>.${q.explanation ? ' ' + escapeHtml(q.explanation) : ''}`;
 
   document.getElementById('quizContinueBtn').style.display = '';
 
@@ -3396,14 +3549,14 @@ function showQuizScore() {
   quizNodes.forEach(n => {
     const ans = quizAnswered[n.id];
     if (!ans) {
-      rows += `<div class="quiz-score-row unanswered"><span class="quiz-score-node">${n.id}</span><span class="quiz-score-name">${n.name}</span><span class="quiz-score-result">—</span></div>`;
+      rows += `<div class="quiz-score-row unanswered"><span class="quiz-score-node">${escapeHtml(n.id)}</span><span class="quiz-score-name">${escapeHtml(n.name)}</span><span class="quiz-score-result">—</span></div>`;
     } else {
       rows += `<div class="quiz-score-row ${ans.correct ? 'correct' : 'wrong'}">
-        <span class="quiz-score-node">${n.id}</span>
-        <span class="quiz-score-name">${n.name}</span>
+        <span class="quiz-score-node">${escapeHtml(n.id)}</span>
+        <span class="quiz-score-name">${escapeHtml(n.name)}</span>
         <span class="quiz-score-result">${ans.correct ? '✓' : '✗'} ${letters[ans.selectedIdx]}</span>
       </div>
-      <div class="quiz-score-question">${n.quiz.question}</div>`;
+      <div class="quiz-score-question">${escapeHtml(n.quiz.question)}</div>`;
     }
   });
 
@@ -3627,7 +3780,7 @@ function confirmAddHotspot() {
     saveRoutes();
     openManageHotspotsModal();
   } else {
-    node.hotspots.push({ id: 'HS' + Date.now(), type, icon, color, filename, yaw: pendingHotspotYaw, pitch: pendingHotspotPitch, label, content });
+    node.hotspots.push({ id: uid('HS'), type, icon, color, filename, yaw: pendingHotspotYaw, pitch: pendingHotspotPitch, label, content });
     pendingHotspotFileData = null;
     closeModal('modalAddHotspot');
     buildHotspots(currentNodeIdx);
@@ -3745,6 +3898,7 @@ function openEditHotspotModal(hsId) {
 }
 function startRepositionHotspot(hsId) {
   if (!img) return;
+  if (repositioningHotspotId) repositioningHotspotId = null; // cancel any in-progress reposition
   repositioningHotspotId = hsId;
   closeModal('modalManageHotspots');
   hotspotEditMode = true;
@@ -3757,7 +3911,10 @@ function showHotspotInfo(hs) {
   document.getElementById('hotspotInfoPopup').style.display = 'block';
 }
 function showHotspotImage(hs) {
-  document.getElementById('lightboxImg').src = hs.content || '';
+  const src = hs.content || '';
+  if (src && !isSafeImageSrc(src)) return;
+  document.getElementById('lightboxImg').src = src;
+  document.getElementById('lightboxImg').alt = hs.label || 'Hotspot image';
   document.getElementById('lightboxTitle').textContent = hs.label + (hs.filename ? ' — ' + hs.filename : '');
   document.getElementById('hotspotLightbox').classList.add('open');
 }
