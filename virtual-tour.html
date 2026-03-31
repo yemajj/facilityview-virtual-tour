@@ -1084,6 +1084,11 @@
   </div>
 </div>
 
+<div id="loadingOverlay">
+  <div class="loader-ring"></div>
+  <div id="loadingMsg">Loading...</div>
+</div>
+
 <script>
 // ══════════════════════════════════════════════════
 // STATE
@@ -4019,11 +4024,14 @@ function initWebGL() {
 // LOADING INDICATOR
 // ══════════════════════════════════════════════════
 function showLoader(msg) {
-  document.getElementById('loadingMsg').textContent = msg || 'Loading...';
-  document.getElementById('loadingOverlay').classList.remove('hidden');
+  const msgEl = document.getElementById('loadingMsg');
+  const overlay = document.getElementById('loadingOverlay');
+  if (msgEl) msgEl.textContent = msg || 'Loading...';
+  if (overlay) overlay.classList.remove('hidden');
 }
 function hideLoader() {
-  document.getElementById('loadingOverlay').classList.add('hidden');
+  const overlay = document.getElementById('loadingOverlay');
+  if (overlay) overlay.classList.add('hidden');
 }
 
 // ══════════════════════════════════════════════════
@@ -4066,9 +4074,5 @@ async function init() {
 init();
 </script>
 
-<div id="loadingOverlay">
-  <div class="loader-ring"></div>
-  <div id="loadingMsg">Loading...</div>
-</div>
 </body>
 </html>
