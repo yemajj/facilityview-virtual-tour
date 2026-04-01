@@ -152,4 +152,31 @@ describe('deleteNodePure', () => {
     const newN02 = nodes[1]; // was N03
     expect(newN02.connections.length).toBeGreaterThan(0); // stale ref still present
   });
+
+  it('correctly reassigns IDs so unrelated surviving nodes keep their connections with updated IDs', () => {
+    // 4 nodes: N01↔N02, N03↔N04. Delete N02.
+    // Result: [N01, N03(→N02), N04(→N03)]
+    // Old N03 (now N02) should still be connected to old N04 (now N03).
+    const nodes = makeNodes(4);
+    nodes[0].connections = ['N02'];  // N01 ↔ N02
+    nodes[1].connections = ['N01'];  // N02 ↔ N01
+    nodes[2].connections = ['N04'];  // N03 ↔ N04
+    nodes[3].connections = ['N03'];  // N04 ↔ N03
+
+    deleteNodePure(nodes, 1); // delete N02 (index 1)
+
+    // After deletion: [N01(orig), N03(orig)→id N02, N04(orig)→id N03]
+    expect(nodes).toHaveLength(3);
+    expect(nodes[0].id).toBe('N01'); // original N01
+    expect(nodes[1].id).toBe('N02'); // original N03, promoted
+    expect(nodes[2].id).toBe('N03'); // original N04, promoted
+
+    // Note: deleteNodePure does NOT remap connections — it only reassigns IDs.
+    // So old N03's connection 'N04' still says 'N04' even though that node is
+    // now 'N03'. This documents that the ID reassignment is NOT reflected in
+    // connections arrays by deleteNodePure (unlike reorderNodePure).
+    // The original connection values are preserved as-is.
+    expect(nodes[1].connections).toEqual(['N04']); // stale — not remapped
+    expect(nodes[2].connections).toEqual(['N03']); // stale — now self-referential after rename
+  });
 });

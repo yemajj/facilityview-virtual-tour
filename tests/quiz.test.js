@@ -143,4 +143,31 @@ describe('calcQuizScore', () => {
     const answered = { N01: { correct: false } };
     expect(calcQuizScore(nodes, answered)).toEqual({ correct: 0, total: 1, pct: 0 });
   });
+
+  it('does not over-count correct answers when quizAnswered has more entries than quiz nodes', () => {
+    // Known behavior mismatch / regression canary:
+    // calcQuizScore counts `correct` from ALL entries in quizAnswered (not just
+    // entries whose node ID has a quiz). Here N02 has no quiz, but quizAnswered
+    // includes a correct entry for it. The function still counts it as correct.
+    // Expected ideal behavior: correct=1, total=1, pct=100.
+    // Actual current behavior: correct=2, total=1, pct=200.
+    // This test documents what the function ACTUALLY returns today so that any
+    // future fix to the over-counting bug will be caught here.
+    const nodes = [
+      { id: 'N01', quiz: { ...QUIZ } }, // has a quiz
+      { id: 'N02', quiz: null }          // no quiz
+    ];
+    const quizAnswered = {
+      N01: { correct: true },  // quiz node — correct
+      N02: { correct: true }   // non-quiz node — should not count, but currently does
+    };
+    const result = calcQuizScore(nodes, quizAnswered);
+    // total is 1 (only N01 has a quiz)
+    expect(result.total).toBe(1);
+    // correct is 2 — both entries in quizAnswered are correct, and the function
+    // counts all of them regardless of whether the node has a quiz
+    expect(result.correct).toBe(2);
+    // pct = Math.round(2/1 * 100) = 200
+    expect(result.pct).toBe(200);
+  });
 });

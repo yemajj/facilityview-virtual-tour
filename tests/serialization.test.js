@@ -130,6 +130,65 @@ describe('serializeRoutes', () => {
     expect(sn.quiz).toBeNull();
   });
 
+  it('serializes hotspot array on a node with all fields', () => {
+    const hotspots = [{
+      id: 'hs1', type: 'info', icon: 'info', color: null,
+      yaw: 0.5, pitch: -0.1, label: 'Test', content: 'Hello'
+    }];
+    const node = makeNode({ hotspots });
+    const result = serializeRoutes([makeRoute({ nodes: [node] })]);
+    const sh = result.routes[0].nodes[0].hotspots[0];
+    expect(sh.id).toBe('hs1');
+    expect(sh.type).toBe('info');
+    expect(sh.icon).toBe('info');
+    expect(sh.color).toBeNull();
+    expect(sh.yaw).toBe(0.5);
+    expect(sh.pitch).toBe(-0.1);
+    expect(sh.label).toBe('Test');
+    expect(sh.content).toBe('Hello');
+  });
+
+  it('serializes quiz object on a node', () => {
+    const quiz = { question: 'Q?', options: ['A', 'B', 'C', 'D'], correctIndex: 1, explanation: 'Because B' };
+    const node = makeNode({ quiz });
+    const result = serializeRoutes([makeRoute({ nodes: [node] })]);
+    const sq = result.routes[0].nodes[0].quiz;
+    expect(sq.question).toBe('Q?');
+    expect(sq.options).toEqual(['A', 'B', 'C', 'D']);
+    expect(sq.correctIndex).toBe(1);
+    expect(sq.explanation).toBe('Because B');
+  });
+
+  it('serializes null quiz as null', () => {
+    const node = makeNode({ quiz: null });
+    const result = serializeRoutes([makeRoute({ nodes: [node] })]);
+    expect(result.routes[0].nodes[0].quiz).toBeNull();
+  });
+
+  it('serializes navArrowColor as null when not set', () => {
+    const node = makeNode({ navArrowColor: null });
+    const result = serializeRoutes([makeRoute({ nodes: [node] })]);
+    expect(result.routes[0].nodes[0].navArrowColor).toBeNull();
+  });
+
+  it('serializes floors array on route with multiple floors', () => {
+    const route = makeRoute({
+      floors: [
+        { id: 'F0', name: 'Ground', image: null },
+        { id: 'F1', name: 'First', image: null }
+      ]
+    });
+    const result = serializeRoutes([route]);
+    const floors = result.routes[0].floors;
+    expect(floors).toHaveLength(2);
+    expect(floors[0].id).toBe('F0');
+    expect(floors[0].name).toBe('Ground');
+    expect(floors[0].imageSrc).toBeNull();
+    expect(floors[1].id).toBe('F1');
+    expect(floors[1].name).toBe('First');
+    expect(floors[1].imageSrc).toBeNull();
+  });
+
   it('round-trips: serialized node data matches original node data', () => {
     const quiz = { question: 'Q?', options: ['A', 'B', 'C', 'D'], correctIndex: 1, explanation: '' };
     const node = makeNode({
@@ -207,5 +266,26 @@ describe('migrateConnections', () => {
     migrateConnections(nodes);
     expect(nodes[0].connections).toContain('N02');
     expect(nodes[1].connections).toContain('N01');
+  });
+
+  it('does NOT migrate when connections are partially populated', () => {
+    // Only N01 has a connection — not ALL are empty, so no chain is added
+    const nodes = [
+      { id: 'N01', connections: ['N02'] },
+      { id: 'N02', connections: [] },
+      { id: 'N03', connections: [] }
+    ];
+    migrateConnections(nodes);
+    // Nodes should be unchanged because the guard only fires when ALL are empty
+    expect(nodes[0].connections).toEqual(['N02']);
+    expect(nodes[1].connections).toEqual([]);
+    expect(nodes[2].connections).toEqual([]);
+  });
+
+  it('does NOT migrate a single node and does not error', () => {
+    // Single node with no connections — should remain with empty connections
+    const nodes = [{ id: 'N01', connections: [] }];
+    expect(() => migrateConnections(nodes)).not.toThrow();
+    expect(nodes[0].connections).toEqual([]);
   });
 });
