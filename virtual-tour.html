@@ -1766,7 +1766,7 @@ function navigateTo(index) {
   let arrivalYaw = null;
   if (currentNodeIdx >= 0 && currentNodeIdx !== index) {
     const from = nodes[currentNodeIdx], to = nodes[index];
-    if (from && from.mapX !== null && to && to.mapX !== null)
+    if (from && from.mapX !== null && from.mapY !== null && to && to.mapX !== null && to.mapY !== null)
       arrivalYaw = Math.atan2(to.mapX - from.mapX, -(to.mapY - from.mapY));
   }
   // For the first node on initial load, face toward the first connected/next node
@@ -1776,7 +1776,7 @@ function navigateTo(index) {
       const firstConnId = fromNode.connections && fromNode.connections[0];
       const firstConn = firstConnId ? nodes.find(n => n.id === firstConnId) : null;
       const nextNode = firstConn || (nodes.length > 1 ? nodes[1] : null);
-      if (nextNode && nextNode.mapX !== null)
+      if (nextNode && nextNode.mapX !== null && nextNode.mapY !== null && fromNode.mapY !== null)
         arrivalYaw = Math.atan2(nextNode.mapX - fromNode.mapX, -(nextNode.mapY - fromNode.mapY));
     }
   }

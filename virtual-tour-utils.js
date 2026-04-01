@@ -291,7 +291,9 @@ export function canvasClickToYawPitch(px, py, W, H, yaw, pitch, fovDeg) {
  */
 export function arrivalBearing(fromNode, toNode) {
   if (fromNode.mapX === null || fromNode.mapX === undefined) return null;
+  if (fromNode.mapY === null || fromNode.mapY === undefined) return null;
   if (toNode.mapX === null || toNode.mapX === undefined) return null;
+  if (toNode.mapY === null || toNode.mapY === undefined) return null;
   return Math.atan2(toNode.mapX - fromNode.mapX, -(toNode.mapY - fromNode.mapY));
 }
 
