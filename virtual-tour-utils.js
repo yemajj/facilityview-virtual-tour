@@ -226,7 +226,9 @@ export function checkNodeQuizDecision(nodes, index, quizAnswered, quizResultsSho
 export function calcQuizScore(nodes, quizAnswered) {
   const quizNodes = nodes.filter(n => n.quiz);
   const total = quizNodes.length;
-  const correct = Object.values(quizAnswered).filter(a => a.correct).length;
+  const quizNodeIds = new Set(quizNodes.map(n => n.id));
+  const correct = Object.entries(quizAnswered)
+    .filter(([id, a]) => quizNodeIds.has(id) && a.correct).length;
   const pct = total > 0 ? Math.round((correct / total) * 100) : 0;
   return { correct, total, pct };
 }
