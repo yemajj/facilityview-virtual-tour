@@ -112,18 +112,35 @@ export function reorderNodePure(nodes, fromIdx, toIdx, activeNodeIdx = -1) {
 
 /**
  * Delete the node at nodeIdx from the array, then reassign sequential IDs.
- *
- * NOTE: This matches the current deleteNode() behavior in the app — it does
- * NOT remove back-references from connected nodes. Connection arrays on
- * remaining nodes may contain stale or redirected IDs after deletion.
+ * Mirrors deleteNode() in the app: removes the deleted node's ID from all
+ * other nodes' connections[], remaps surviving connection IDs, and removes
+ * hotspot links targeting the deleted node (remapping others via idMap).
  *
  * @param {Array}  nodes    - array of node objects (mutated in place)
  * @param {number} nodeIdx  - index of node to remove
  * @returns {Array} the same nodes array
  */
 export function deleteNodePure(nodes, nodeIdx) {
+  const deletedId = nodes[nodeIdx].id;
   nodes.splice(nodeIdx, 1);
-  nodes.forEach((n, i) => { n.id = 'N' + String(i + 1).padStart(2, '0'); });
+  // Reassign sequential IDs and build old→new map
+  const idMap = {};
+  nodes.forEach((n, i) => {
+    const oldId = n.id;
+    n.id = 'N' + String(i + 1).padStart(2, '0');
+    idMap[oldId] = n.id;
+  });
+  // Remove deleted ID and remap remaining IDs in connections[]
+  nodes.forEach(n => {
+    n.connections = (n.connections || []).filter(id => id !== deletedId).map(id => idMap[id] || id);
+  });
+  // Remap hotspot link targets; remove links pointing at deleted node
+  nodes.forEach(n => {
+    n.hotspots = (n.hotspots || []).filter(h => !(h.type === 'link' && h.content === deletedId));
+    n.hotspots.forEach(h => {
+      if (h.type === 'link' && idMap[h.content]) h.content = idMap[h.content];
+    });
+  });
   return nodes;
 }
 
