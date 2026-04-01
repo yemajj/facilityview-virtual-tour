@@ -275,3 +275,133 @@ export function arrivalBearing(fromNode, toNode) {
   if (toNode.mapX === null || toNode.mapX === undefined) return null;
   return Math.atan2(toNode.mapX - fromNode.mapX, -(toNode.mapY - fromNode.mapY));
 }
+
+// ──────────────────────────────────────────────────────────────────────────────
+// UNDO / REDO STACK
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Create a snapshot of node positions and connections for undo/redo.
+ * Returns a plain object (deep-copied positions/connections, matched by node ID).
+ */
+export function mapSnapshot(nodes) {
+  return nodes.map(n => ({ id: n.id, mapX: n.mapX, mapY: n.mapY, connections: [...(n.connections || [])] }));
+}
+
+/**
+ * Apply a snapshot back onto nodes (matched by node ID, not index).
+ * Mutates node.mapX, node.mapY, and node.connections in place.
+ */
+export function applySnapshot(nodes, snapshot) {
+  const byId = {};
+  for (const s of snapshot) byId[s.id] = s;
+  for (const n of nodes) {
+    const s = byId[n.id];
+    if (!s) continue;
+    n.mapX = s.mapX;
+    n.mapY = s.mapY;
+    n.connections = [...s.connections];
+  }
+}
+
+/**
+ * Push a snapshot onto the undo stack (capped at maxSize).
+ * Clears the redo stack (as any new action invalidates redo history).
+ * Returns new { undoStack, redoStack }.
+ */
+export function pushUndo(undoStack, redoStack, snapshot, maxSize = 50) {
+  const newUndo = [...undoStack, snapshot];
+  if (newUndo.length > maxSize) newUndo.shift();
+  return { undoStack: newUndo, redoStack: [] };
+}
+
+/**
+ * Perform an undo: pop from undoStack, push currentSnapshot to redoStack.
+ * Returns { undoStack, redoStack, snapshot } where snapshot is what to apply,
+ * or null if the undo stack is empty.
+ */
+export function applyUndo(undoStack, redoStack, currentSnapshot) {
+  if (undoStack.length === 0) return null;
+  const newUndo = [...undoStack];
+  const snapshot = newUndo.pop();
+  return { undoStack: newUndo, redoStack: [...redoStack, currentSnapshot], snapshot };
+}
+
+/**
+ * Perform a redo: pop from redoStack, push currentSnapshot to undoStack.
+ * Returns { undoStack, redoStack, snapshot } where snapshot is what to apply,
+ * or null if the redo stack is empty.
+ */
+export function applyRedo(undoStack, redoStack, currentSnapshot) {
+  if (redoStack.length === 0) return null;
+  const newRedo = [...redoStack];
+  const snapshot = newRedo.pop();
+  return { undoStack: [...undoStack, currentSnapshot], redoStack: newRedo, snapshot };
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// FLOOR MANAGEMENT
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Add a new floor to the route and return it.
+ * Generates a unique floor ID using Date.now() — for testing, an idGen function can be injected.
+ */
+export function addFloorPure(route, name, idGen = () => 'F' + Date.now()) {
+  const floor = { id: idGen(), name, image: null };
+  route.floors.push(floor);
+  return floor;
+}
+
+/**
+ * Delete a floor from the route. Guards against deleting the last floor.
+ * Unassigns (sets floorId = null) any nodes that were on this floor.
+ * Returns true if deleted, false if guarded (last floor).
+ */
+export function deleteFloorPure(route, floorId) {
+  if (route.floors.length <= 1) return false;
+  route.floors = route.floors.filter(f => f.id !== floorId);
+  for (const n of route.nodes) {
+    if (n.floorId === floorId) n.floorId = null;
+  }
+  return true;
+}
+
+/**
+ * Assign a node to a floor. Pass null to unassign.
+ */
+export function assignNodeFloorPure(node, floorId) {
+  node.floorId = floorId;
+}
+
+// ──────────────────────────────────────────────────────────────────────────────
+// ROUTE MANAGEMENT
+// ──────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Duplicate a route: creates a deep copy with a new ID and appended name.
+ * Image and thumbUrl objects are shared by reference (not cloned) — same as the app.
+ * idGen can be injected for testing.
+ */
+export function duplicateRoutePure(route, idGen = () => 'R' + Date.now()) {
+  const newRoute = JSON.parse(JSON.stringify(route, (key, val) => {
+    // JSON.stringify can't handle Image objects — they serialize as {}
+    // We handle imageSrc separately after
+    if (key === 'image' || key === 'thumbUrl') return null;
+    return val;
+  }));
+  newRoute.id = idGen();
+  newRoute.name = route.name + ' (copy)';
+
+  // Re-share image and thumbUrl references from original nodes
+  newRoute.nodes.forEach((n, i) => {
+    n.image = route.nodes[i].image;
+    n.thumbUrl = route.nodes[i].thumbUrl;
+  });
+  // Re-share floor image references
+  newRoute.floors.forEach((f, i) => {
+    f.image = route.floors[i].image;
+  });
+
+  return newRoute;
+}

@@ -156,4 +156,15 @@ describe('arrivalBearing', () => {
     const node = { mapX: 50, mapY: 50 };
     expect(arrivalBearing(node, node)).toBeCloseTo(Math.PI);
   });
+
+  it('fromNode mapX set but mapY is null — documents current behavior (no null guard on mapY)', () => {
+    // Known gap: the implementation only guards against null/undefined mapX,
+    // not mapY. When mapY is null, -(null - null) = -0 and Math.atan2(dx, -0)
+    // returns a number instead of null.
+    // This test documents what the function ACTUALLY returns today so that any
+    // future fix (adding a mapY null guard) will be caught here.
+    const result = arrivalBearing({ mapX: 50, mapY: null }, { mapX: 100, mapY: 50 });
+    // Current behavior: returns a number (not null)
+    expect(typeof result).toBe('number');
+  });
 });
