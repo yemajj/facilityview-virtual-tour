@@ -1130,7 +1130,6 @@ let kioskActive     = false;
 let kioskAuto       = false;
 let kioskIntervalSec = 10;
 let kioskTimerId    = null;
-let kioskElapsed    = 0;          // ms elapsed in current countdown
 
 // Quiz session state
 let quizAnswered = {};         // nodeId → { selectedIdx, correct, correctIdx }
@@ -3431,29 +3430,26 @@ function setKioskInterval(val) {
 }
 function startKioskTimer() {
   stopKioskTimer();
-  kioskElapsed = 0;
-  const tick = 100; // ms per tick
   const bar = document.getElementById('kioskProgressBar');
-  kioskTimerId = setInterval(() => {
-    kioskElapsed += tick;
-    const pct = Math.min(100, (kioskElapsed / (kioskIntervalSec * 1000)) * 100);
-    if (bar) bar.style.width = pct + '%';
-    if (kioskElapsed >= kioskIntervalSec * 1000) {
-      kioskElapsed = 0;
-      bar.style.width = '0%';
-      const nodes = currentNodes();
-      if (nodes.length === 0) return;
-      // Advance to next node; loop back to first after last
-      const next = currentNodeIdx < nodes.length - 1 ? currentNodeIdx + 1 : 0;
-      navigateTo(next);
-    }
-  }, tick);
+  if (bar) {
+    bar.style.transition = 'none';
+    bar.style.width = '0%';
+    bar.offsetWidth; // force reflow so the reset takes effect before the transition starts
+    bar.style.transition = `width ${kioskIntervalSec}s linear`;
+    bar.style.width = '100%';
+  }
+  kioskTimerId = setTimeout(() => {
+    const nodes = currentNodes();
+    if (nodes.length === 0) return;
+    // Advance to next node; loop back to first after last
+    const next = currentNodeIdx < nodes.length - 1 ? currentNodeIdx + 1 : 0;
+    navigateTo(next);
+  }, kioskIntervalSec * 1000);
 }
 function stopKioskTimer() {
-  if (kioskTimerId) { clearInterval(kioskTimerId); kioskTimerId = null; }
+  if (kioskTimerId) { clearTimeout(kioskTimerId); kioskTimerId = null; }
   const bar = document.getElementById('kioskProgressBar');
-  if (bar) bar.style.width = '0%';
-  kioskElapsed = 0;
+  if (bar) { bar.style.transition = 'none'; bar.style.width = '0%'; }
 }
 // Escape key exits kiosk mode
 document.addEventListener('keydown', e => {
