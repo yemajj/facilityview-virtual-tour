@@ -1160,6 +1160,7 @@ const BAKED_ROUTES = null;
 
 // IndexedDB
 let db = null;
+let _saveTimeout = null;
 
 const canvas       = document.getElementById('panoramaCanvas');
 let   ctx          = null;   // 2D context — only used when WebGL unavailable
@@ -3085,6 +3086,12 @@ function openDB() {
 }
 function saveRoutes() {
   if (!db) return;
+  if (_saveTimeout) clearTimeout(_saveTimeout);
+  _saveTimeout = setTimeout(_saveRoutesNow, 300);
+}
+function _saveRoutesNow() {
+  if (!db) return;
+  _saveTimeout = null;
   const data = routes.map(r => ({
     id: r.id, name: r.name, desc: r.desc,
     floors: (r.floors || []).map(f => ({ id: f.id, name: f.name, imageSrc: f.image ? f.image.src : null })),
