@@ -258,6 +258,8 @@
   .hotspot-pin.image-type svg { color:#88cc44; }
   .hotspot-pin.file-type     { background:rgba(255,153,68,0.15); border-color:#ff9944; }
   .hotspot-pin.file-type svg { color:#ff9944; }
+  .hotspot-pin.quiz-type     { background:rgba(224,64,251,0.15); border-color:#e040fb; }
+  .hotspot-pin.quiz-type svg { color:#e040fb; }
 
   /* MODAL BASE */
   .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:200; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(6px); opacity:0; pointer-events:none; transition:opacity 0.2s; }
@@ -946,6 +948,7 @@
         <option value="url">External URL</option>
         <option value="image">Image Viewer</option>
         <option value="file">Document / PDF</option>
+        <option value="quiz">Quiz Question</option>
       </select>
     </div>
     <div class="modal-field"><label>Label</label><input type="text" id="hotspotLabel" placeholder="e.g. Safety Exit" maxlength="40"></div>
@@ -965,6 +968,22 @@
         <span id="hotspotFileLabel">Click to upload image or PDF</span>
       </button>
       <input type="file" id="hotspotFileInput" accept="image/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx" style="display:none">
+    </div>
+    <div id="hotspotQuizField" style="display:none">
+      <div class="modal-field"><label>Question</label><input type="text" id="hsQuizQText" placeholder="Enter the question..." maxlength="200"></div>
+      <div class="modal-field" style="display:flex;flex-direction:column;gap:6px;">
+        <label>Options</label>
+        <div class="quiz-option-row"><span class="quiz-letter">A</span><input type="text" id="hsQuizOpt0" placeholder="Option A" maxlength="120"></div>
+        <div class="quiz-option-row"><span class="quiz-letter">B</span><input type="text" id="hsQuizOpt1" placeholder="Option B" maxlength="120"></div>
+        <div class="quiz-option-row"><span class="quiz-letter">C</span><input type="text" id="hsQuizOpt2" placeholder="Option C" maxlength="120"></div>
+        <div class="quiz-option-row"><span class="quiz-letter">D</span><input type="text" id="hsQuizOpt3" placeholder="Option D" maxlength="120"></div>
+      </div>
+      <div class="modal-field"><label>Correct Answer</label>
+        <select id="hsQuizCorrectSelect" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:var(--text);font-family:var(--sans);font-size:13px;padding:8px 10px;outline:none;">
+          <option value="0">A</option><option value="1">B</option><option value="2">C</option><option value="3">D</option>
+        </select>
+      </div>
+      <div class="modal-field"><label>Explanation (optional)</label><input type="text" id="hsQuizExplText" placeholder="Why this answer is correct..." maxlength="200"></div>
     </div>
     <div class="modal-field" id="hotspotIconField">
       <label>Icon</label>
@@ -992,6 +1011,9 @@
         </button>
         <button class="hs-icon-btn" data-icon="document" onclick="selectHotspotIcon('document')" title="Document/PDF">
           <svg viewBox="0 0 24 24"><path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z"/></svg>
+        </button>
+        <button class="hs-icon-btn" data-icon="quiz" onclick="selectHotspotIcon('quiz')" title="Quiz Question">
+          <svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>
         </button>
       </div>
     </div>
@@ -1184,11 +1206,12 @@ const HOTSPOT_ICONS = {
   link:      `<svg viewBox="0 0 24 24"><path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7zm0 9.5c-1.38 0-2.5-1.12-2.5-2.5s1.12-2.5 2.5-2.5 2.5 1.12 2.5 2.5-1.12 2.5-2.5 2.5z"/></svg>`,
   external:  `<svg viewBox="0 0 24 24"><path d="M19 19H5V5h7V3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7h-2v7zM14 3v2h3.59l-9.83 9.83 1.41 1.41L19 6.41V10h2V3h-7z"/></svg>`,
   image:     `<svg viewBox="0 0 24 24"><path d="M21 19V5c0-1.1-.9-2-2-2H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2zM8.5 13.5l2.5 3.01L14.5 12l4.5 6H5l3.5-4.5z"/></svg>`,
-  document:  `<svg viewBox="0 0 24 24"><path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z"/></svg>`
+  document:  `<svg viewBox="0 0 24 24"><path d="M20 2H8c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zm-8.5 7.5c0 .83-.67 1.5-1.5 1.5H9v2H7.5V7H10c.83 0 1.5.67 1.5 1.5v1zm5 2c0 .83-.67 1.5-1.5 1.5h-2.5V7H15c.83 0 1.5.67 1.5 1.5v3zm4-3H19v1h1.5V11H19v2h-1.5V7h3v1.5zM9 9.5h1v-1H9v1zM4 6H2v14c0 1.1.9 2 2 2h14v-2H4V6zm10 5.5h1v-3h-1v3z"/></svg>`,
+  quiz:      `<svg viewBox="0 0 24 24"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 17h-2v-2h2v2zm2.07-7.75l-.9.92C13.45 12.9 13 13.5 13 15h-2v-.5c0-1.1.45-2.1 1.17-2.83l1.24-1.26c.37-.36.59-.86.59-1.41 0-1.1-.9-2-2-2s-2 .9-2 2H8c0-2.21 1.79-4 4-4s4 1.79 4 4c0 .88-.36 1.68-.93 2.25z"/></svg>`
 };
 const HOTSPOT_ICON_DEFAULTS = {
   info: '#00c8ff', warning: '#ffaa00', danger: '#ff3c3c', important: '#ff7800', note: '#a064ff', link: '#00e676',
-  external: '#4db8ff', image: '#88cc44', document: '#ff9944'
+  external: '#4db8ff', image: '#88cc44', document: '#ff9944', quiz: '#e040fb'
 };
 
 // ── helpers ──
@@ -1255,7 +1278,7 @@ function duplicateRoute() {
       mapX: n.mapX, mapY: n.mapY,
       floorId: n.floorId || null,
       connections: [...(n.connections || [])],
-      hotspots: (n.hotspots || []).map(h => ({ ...h })),
+      hotspots: (n.hotspots || []).map(h => ({ ...h, quiz: h.quiz ? { ...h.quiz, options: [...h.quiz.options] } : h.quiz })),
       navArrowColor: n.navArrowColor || null,
       quiz: n.quiz ? { ...n.quiz, options: [...n.quiz.options] } : null
     }))
@@ -2040,6 +2063,10 @@ function buildHotspots(index) {
         el.addEventListener('click', () => showHotspotImage(hs));
       } else if (hs.type === 'file') {
         el.addEventListener('click', () => { if (hs.content && (isSafeUrl(hs.content) || hs.content.startsWith('data:'))) window.open(hs.content, '_blank'); });
+      } else if (hs.type === 'quiz') {
+        el.addEventListener('click', () => {
+          if (hs.quiz && !quizAnswered[hs.id]) showQuizQuestion({ id: hs.id, name: hs.label, quiz: hs.quiz });
+        });
       }
       el.addEventListener('contextmenu', e => {
         e.preventDefault();
@@ -3127,7 +3154,7 @@ function _saveRoutesNow() {
  * so callers can decide whether to alert the user.
  */
 function sanitizeRouteData(rd) {
-  const VALID_HOTSPOT_TYPES = ['info', 'link', 'url', 'image', 'file'];
+  const VALID_HOTSPOT_TYPES = ['info', 'link', 'url', 'image', 'file', 'quiz'];
   let droppedConnections = 0, droppedHotspots = 0;
 
   if (typeof rd.name !== 'string' || !rd.name.trim()) {
@@ -3625,29 +3652,38 @@ function closeQuizOverlay() {
 function showQuizScore() {
   const nodes = currentNodes();
   const route = currentRoute();
-  const quizNodes = nodes.filter(n => n.quiz);
+  // Collect all quiz sources: node quizzes + hotspot quizzes
+  const allQuizItems = [];
+  nodes.forEach(n => {
+    if (n.quiz) allQuizItems.push({ id: n.id, name: n.name, quiz: n.quiz });
+    (n.hotspots || []).forEach(hs => {
+      if (hs.type === 'quiz' && hs.quiz) allQuizItems.push({ id: hs.id, name: hs.label, quiz: hs.quiz });
+    });
+  });
   const answered  = Object.keys(quizAnswered).length;
-  if (!answered && !quizNodes.length) return;
+  if (!answered && !allQuizItems.length) return;
 
-  const quizNodeIds = new Set(quizNodes.map(n => n.id));
+  const allQuizIds = new Set(allQuizItems.map(q => q.id));
   const correct = Object.entries(quizAnswered)
-    .filter(([id, a]) => quizNodeIds.has(id) && a.correct).length;
-  const total   = quizNodes.length;
+    .filter(([id, a]) => allQuizIds.has(id) && a.correct).length;
+  const total   = allQuizItems.length;
   const pct     = total > 0 ? Math.round((correct / total) * 100) : 0;
   const letters = ['A','B','C','D'];
 
   let rows = '';
-  quizNodes.forEach(n => {
-    const ans = quizAnswered[n.id];
+  allQuizItems.forEach(q => {
+    const ans = quizAnswered[q.id];
+    const isHotspot = q.id.startsWith('HS');
+    const displayId = isHotspot ? '?' : escapeHtml(q.id);
     if (!ans) {
-      rows += `<div class="quiz-score-row unanswered"><span class="quiz-score-node">${escapeHtml(n.id)}</span><span class="quiz-score-name">${escapeHtml(n.name)}</span><span class="quiz-score-result">—</span></div>`;
+      rows += `<div class="quiz-score-row unanswered"><span class="quiz-score-node">${displayId}</span><span class="quiz-score-name">${escapeHtml(q.name)}</span><span class="quiz-score-result">—</span></div>`;
     } else {
       rows += `<div class="quiz-score-row ${ans.correct ? 'correct' : 'wrong'}">
-        <span class="quiz-score-node">${escapeHtml(n.id)}</span>
-        <span class="quiz-score-name">${escapeHtml(n.name)}</span>
+        <span class="quiz-score-node">${displayId}</span>
+        <span class="quiz-score-name">${escapeHtml(q.name)}</span>
         <span class="quiz-score-result">${ans.correct ? '✓' : '✗'} ${letters[ans.selectedIdx]}</span>
       </div>
-      <div class="quiz-score-question">${escapeHtml(n.quiz.question)}</div>`;
+      <div class="quiz-score-question">${escapeHtml(q.quiz.question)}</div>`;
     }
   });
 
@@ -3794,6 +3830,10 @@ function openAddHotspotModal(yawVal, pitchVal) {
   document.getElementById('hotspotUrl').value = '';
   document.getElementById('hotspotFileLabel').textContent = 'Click to upload image or PDF';
   pendingHotspotFileData = null;
+  document.getElementById('hsQuizQText').value = '';
+  [0,1,2,3].forEach(i => { document.getElementById('hsQuizOpt' + i).value = ''; });
+  document.getElementById('hsQuizCorrectSelect').value = '0';
+  document.getElementById('hsQuizExplText').value = '';
   selectHotspotIcon('info');
   document.getElementById('hotspotColor').value = HOTSPOT_ICON_DEFAULTS.info;
   document.getElementById('addHotspotSub').textContent =
@@ -3819,9 +3859,10 @@ function updateHotspotTypeFields() {
   document.getElementById('hotspotLinkField').style.display    = type === 'link'  ? '' : 'none';
   document.getElementById('hotspotUrlField').style.display     = type === 'url'   ? '' : 'none';
   document.getElementById('hotspotFileField').style.display    = (type === 'image' || type === 'file') ? '' : 'none';
-  document.getElementById('hotspotIconField').style.display    = type === 'link'  ? 'none' : '';
+  document.getElementById('hotspotQuizField').style.display    = type === 'quiz'  ? '' : 'none';
+  document.getElementById('hotspotIconField').style.display    = (type === 'link' || type === 'quiz') ? 'none' : '';
   // Auto-select the icon that matches the type when switching types
-  const typeIconMap = { url: 'external', image: 'image', file: 'document' };
+  const typeIconMap = { url: 'external', image: 'image', file: 'document', quiz: 'quiz' };
   if (typeIconMap[type]) selectHotspotIcon(typeIconMap[type]);
 }
 function selectHotspotIcon(icon) {
@@ -3852,10 +3893,19 @@ function confirmAddHotspot() {
       if (existingHs) { content = existingHs.content; filename = existingHs.filename || null; }
     }
   }
+  let hsQuiz = null;
+  if (type === 'quiz') {
+    const qText = document.getElementById('hsQuizQText').value.trim();
+    const opts = [0,1,2,3].map(i => document.getElementById('hsQuizOpt' + i).value.trim());
+    const correctIdx = parseInt(document.getElementById('hsQuizCorrectSelect').value) || 0;
+    const explanation = document.getElementById('hsQuizExplText').value.trim();
+    if (!qText || opts.some(o => !o)) { alert('Please fill in the question and all four options.'); return; }
+    hsQuiz = { question: qText, options: opts, correctIndex: correctIdx, explanation };
+  }
   if ((type === 'url') && !content) { document.getElementById('hotspotUrl').focus(); return; }
   if ((type === 'image' || type === 'file') && !content) { alert('Please upload a file.'); return; }
   const activeIconBtn = document.querySelector('.hs-icon-btn.active');
-  const icon = activeIconBtn ? activeIconBtn.dataset.icon : (type === 'link' ? 'link' : 'info');
+  const icon = activeIconBtn ? activeIconBtn.dataset.icon : (type === 'link' ? 'link' : type === 'quiz' ? 'quiz' : 'info');
   const pickedColor = document.getElementById('hotspotColor').value;
   const defaultColor = HOTSPOT_ICON_DEFAULTS[icon] || '#00c8ff';
   const color = pickedColor.toLowerCase() !== defaultColor.toLowerCase() ? pickedColor : null;
@@ -3864,14 +3914,14 @@ function confirmAddHotspot() {
   node.hotspots = node.hotspots || [];
   if (editingHotspotId) {
     const hs = node.hotspots.find(h => h.id === editingHotspotId);
-    if (hs) { hs.type = type; hs.icon = icon; hs.color = color; hs.label = label; hs.content = content; hs.filename = filename; }
+    if (hs) { hs.type = type; hs.icon = icon; hs.color = color; hs.label = label; hs.content = content; hs.filename = filename; hs.quiz = hsQuiz; }
     editingHotspotId = null;
     closeModal('modalAddHotspot');
     buildHotspots(currentNodeIdx);
     saveRoutes();
     openManageHotspotsModal();
   } else {
-    node.hotspots.push({ id: uid('HS'), type, icon, color, filename, yaw: pendingHotspotYaw, pitch: pendingHotspotPitch, label, content });
+    node.hotspots.push({ id: uid('HS'), type, icon, color, filename, yaw: pendingHotspotYaw, pitch: pendingHotspotPitch, label, content, quiz: hsQuiz });
     pendingHotspotFileData = null;
     closeModal('modalAddHotspot');
     buildHotspots(currentNodeIdx);
@@ -3912,13 +3962,14 @@ function buildHotspotManageList() {
     const listPinColor = hs.color || HOTSPOT_ICON_DEFAULTS[resolvedIcon] || '#00c8ff';
     const listIconSvg = HOTSPOT_ICONS[resolvedIcon] || HOTSPOT_ICONS.info;
     const listIcon = listIconSvg.replace('<svg ', `<svg width="14" height="14" fill="${listPinColor}" style="flex-shrink:0" `);
-    const badgeColor = hs.type === 'info' ? 'rgba(0,200,255,0.12)' : 'rgba(0,230,118,0.12)';
-    const badgeText = hs.type === 'info' ? 'var(--accent2)' : 'var(--success)';
+    const badgeColor = hs.type === 'info' ? 'rgba(0,200,255,0.12)' : hs.type === 'quiz' ? 'rgba(224,64,251,0.12)' : 'rgba(0,230,118,0.12)';
+    const badgeText = hs.type === 'info' ? 'var(--accent2)' : hs.type === 'quiz' ? '#e040fb' : 'var(--success)';
     const previewText = hs.type === 'info'   ? (hs.content || '—')
       : hs.type === 'link'   ? ('→ ' + (currentNodes().find(n => n.id === hs.content) || {name: hs.content}).name)
       : hs.type === 'url'    ? (hs.content || '—')
       : hs.type === 'image'  ? ('🖼 ' + (hs.filename || 'Image'))
       : hs.type === 'file'   ? ('📄 ' + (hs.filename || 'Document'))
+      : hs.type === 'quiz'   ? ('❓ ' + (hs.quiz ? hs.quiz.question : '—'))
       : '—';
     row.innerHTML = `
       ${listIcon}
@@ -3966,7 +4017,19 @@ function openEditHotspotModal(hsId) {
     pendingHotspotFileData = null;
     document.getElementById('hotspotFileLabel').textContent = 'Click to upload image or PDF';
   }
-  const editIcon = hs.icon || (hs.type === 'link' ? 'link' : hs.type === 'url' ? 'external' : hs.type === 'image' ? 'image' : hs.type === 'file' ? 'document' : 'info');
+  // Populate quiz fields if editing a quiz hotspot
+  if (hs.type === 'quiz' && hs.quiz) {
+    document.getElementById('hsQuizQText').value = hs.quiz.question || '';
+    [0,1,2,3].forEach(i => { document.getElementById('hsQuizOpt' + i).value = hs.quiz.options[i] || ''; });
+    document.getElementById('hsQuizCorrectSelect').value = hs.quiz.correctIndex ?? 0;
+    document.getElementById('hsQuizExplText').value = hs.quiz.explanation || '';
+  } else {
+    document.getElementById('hsQuizQText').value = '';
+    [0,1,2,3].forEach(i => { document.getElementById('hsQuizOpt' + i).value = ''; });
+    document.getElementById('hsQuizCorrectSelect').value = '0';
+    document.getElementById('hsQuizExplText').value = '';
+  }
+  const editIcon = hs.icon || (hs.type === 'link' ? 'link' : hs.type === 'url' ? 'external' : hs.type === 'image' ? 'image' : hs.type === 'file' ? 'document' : hs.type === 'quiz' ? 'quiz' : 'info');
   selectHotspotIcon(editIcon);
   document.getElementById('hotspotColor').value = hs.color || HOTSPOT_ICON_DEFAULTS[editIcon] || '#00c8ff';
   // populate link target select and pre-select current target
