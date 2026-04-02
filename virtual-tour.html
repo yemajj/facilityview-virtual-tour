@@ -51,8 +51,12 @@
   .main { display:flex; flex:1; overflow:hidden; }
 
   /* SIDEBAR */
-  .sidebar { width:var(--sidebar-w); background:linear-gradient(180deg, var(--panel) 0%, #0d1120 100%); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; overflow:hidden; transition:width 0.25s cubic-bezier(0.4,0,0.2,1), opacity 0.2s ease; }
+  .sidebar { position:relative; width:var(--sidebar-w); background:linear-gradient(180deg, var(--panel) 0%, #0d1120 100%); border-right:1px solid var(--border); display:flex; flex-direction:column; flex-shrink:0; overflow:hidden; transition:width 0.25s cubic-bezier(0.4,0,0.2,1), opacity 0.2s ease; }
   .sidebar.collapsed { width:0; opacity:0; pointer-events:none; }
+  .sidebar-resize-handle { position:absolute; top:0; right:0; width:6px; height:100%; cursor:col-resize; z-index:25; touch-action:none; background:transparent; border:none; padding:0; margin:0; box-sizing:border-box; }
+  .sidebar-resize-handle:hover, .sidebar.resizing .sidebar-resize-handle { background:rgba(124,111,239,0.22); }
+  .sidebar.collapsed .sidebar-resize-handle { display:none; }
+  .sidebar.resizing { transition:none !important; }
   .sidebar-header { display:flex; align-items:center; justify-content:space-between; padding:10px 14px 8px; border-bottom:1px solid var(--border); flex-shrink:0; }
   .sidebar-title { font-family:var(--mono); font-size:9px; letter-spacing:2px; color:var(--muted); text-transform:uppercase; }
   .sidebar-route-badge { font-family:var(--mono); font-size:9px; padding:2px 7px; border-radius:var(--radius-sm); background:rgba(124,111,239,0.12); color:var(--accent); border:1px solid rgba(124,111,239,0.25); max-width:120px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -662,6 +666,7 @@
         <button onclick="openAddDocModal()">+ Add Document</button>
       </div>
     </div>
+    <button type="button" class="sidebar-resize-handle" id="sidebarResizeHandle" title="Drag to resize panel (double-click resets)" aria-label="Resize sidebar width"></button>
   </div>
 
   <!-- VIEWER -->
@@ -1335,6 +1340,101 @@ function toggleSidebar() {
   sidebarOpen = !sidebarOpen;
   document.getElementById('sidebar').classList.toggle('collapsed', !sidebarOpen);
   setTimeout(resizeCanvas, 260);
+}
+
+const SIDEBAR_W_STORAGE = 'facilityview_sidebar_w';
+const SIDEBAR_W_MIN = 200;
+const SIDEBAR_W_DEFAULT = 260;
+const SIDEBAR_W_CAP = 720;
+function getSidebarWidthConstraints() {
+  const min = SIDEBAR_W_MIN;
+  const max = Math.max(min, Math.min(SIDEBAR_W_CAP, window.innerWidth - 120));
+  return { min, max };
+}
+function clampSidebarWidth(px) {
+  const { min, max } = getSidebarWidthConstraints();
+  return Math.min(max, Math.max(min, Math.round(px)));
+}
+function setSidebarWidthPx(px, persist) {
+  const w = clampSidebarWidth(px);
+  document.documentElement.style.setProperty('--sidebar-w', w + 'px');
+  if (persist) {
+    try { localStorage.setItem(SIDEBAR_W_STORAGE, String(w)); } catch (e) { /* ignore */ }
+  }
+  return w;
+}
+function applyStoredSidebarWidth() {
+  let px = SIDEBAR_W_DEFAULT;
+  try {
+    const raw = localStorage.getItem(SIDEBAR_W_STORAGE);
+    if (raw != null && raw !== '') {
+      const n = parseInt(raw, 10);
+      if (!Number.isNaN(n)) px = n;
+    }
+  } catch (e) { /* ignore */ }
+  setSidebarWidthPx(px, false);
+}
+function initSidebarResize() {
+  applyStoredSidebarWidth();
+  const sidebarEl = document.getElementById('sidebar');
+  const handle = document.getElementById('sidebarResizeHandle');
+  if (!handle) return;
+  let dragActive = false;
+  let startX = 0;
+  let startW = 0;
+  function onMove(clientX) {
+    const dx = clientX - startX;
+    setSidebarWidthPx(startW + dx, false);
+    resizeCanvas();
+  }
+  function endDrag() {
+    if (!dragActive) return;
+    dragActive = false;
+    sidebarEl.classList.remove('resizing');
+    const { min, max } = getSidebarWidthConstraints();
+    const cur = sidebarEl.getBoundingClientRect().width;
+    setSidebarWidthPx(Math.min(max, Math.max(min, cur)), true);
+    resizeCanvas();
+  }
+  handle.addEventListener('pointerdown', e => {
+    if (e.button != null && e.button !== 0) return;
+    if (sidebarEl.classList.contains('collapsed')) return;
+    e.preventDefault();
+    dragActive = true;
+    startX = e.clientX;
+    startW = sidebarEl.getBoundingClientRect().width;
+    sidebarEl.classList.add('resizing');
+    try { handle.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+  });
+  handle.addEventListener('pointermove', e => {
+    if (!dragActive) return;
+    onMove(e.clientX);
+  });
+  handle.addEventListener('pointerup', e => {
+    if (dragActive) {
+      try { handle.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      endDrag();
+    }
+  });
+  handle.addEventListener('pointercancel', e => {
+    if (dragActive) {
+      try { handle.releasePointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+      endDrag();
+    }
+  });
+  handle.addEventListener('dblclick', e => {
+    e.preventDefault();
+    if (sidebarEl.classList.contains('collapsed')) return;
+    setSidebarWidthPx(SIDEBAR_W_DEFAULT, true);
+    resizeCanvas();
+  });
+  window.addEventListener('resize', () => {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w').trim();
+    let n = parseFloat(raw);
+    if (Number.isNaN(n)) n = SIDEBAR_W_DEFAULT;
+    setSidebarWidthPx(n, false);
+    resizeCanvas();
+  });
 }
 window.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
@@ -4654,6 +4754,7 @@ function setupPWA() {
 
 async function init() {
   setupPWA();
+  initSidebarResize();
   document.getElementById('overlay').style.opacity = '0';
   document.getElementById('hotspots').style.opacity = '0';
   initWebGL();
