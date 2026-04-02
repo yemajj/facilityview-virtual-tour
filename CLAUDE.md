@@ -114,7 +114,7 @@ routes[] = [{
 | `saveRoutes()` | Serialize routes[] → IndexedDB |
 | `loadRoutes()` | Deserialize IndexedDB → routes[] (reconstructs Images) |
 | `exportRoutes()` | Download routes as JSON file with base64 images |
-| `importRoutes(file)` | Read JSON, reconstruct Images, append to routes[] |
+| `importRoutes(file)` | Read JSON, sanitize, reconstruct Images, append to routes[] |
 | `buildSidebar()` | Rebuild node list in left panel (includes drag-reorder handles) |
 | `reorderNode(from, to)` | Splice nodes[], reassign IDs, remap connections[], update currentNodeIdx |
 | `rebuildRouteSelect()` | Rebuild route dropdown in header |
@@ -274,13 +274,14 @@ header
 
 - **`clearViewer()` must not contain `clearViewer()`** — it was once replaced recursively by a bulk find-replace. The 2D branch must use `ctx.clearRect(...)` directly.
 - **`connections[]` drives ALL navigation** — linear prev/next arrows are no longer hardcoded. New nodes auto-connect to the previous node; users can remove any connection via the Connect tool. On load, pre-v2 saves (all-empty connections) are migrated to sequential connections.
-- **Node IDs reassign on reorder/delete** — connections[] on other nodes are remapped by `reorderNode()` and `deleteNode()`. Hotspot `content` field (link type) references node IDs and may need manual fix after reorder (known limitation).
+- **Node IDs reassign on reorder/delete** — connections[] on other nodes are remapped by `reorderNode()` and `deleteNode()`. Hotspot `content` field (link type) is also remapped automatically.
 - **WebGL crossfade** — requires `preserveDrawingBuffer: true` so `fadeCtx.drawImage(canvas)` can read the last WebGL frame.
 - **Non-POT textures** — WebGL 1 requires `CLAMP_TO_EDGE` for non-power-of-2 textures.
 - **Touch tap detection** — `mouseDownX/Y` must be set in both `mousedown` and `touchstart` handlers or tap detection breaks on mobile.
 - **`image` can be null** — nodes may have no panorama. Always guard with `if (node.image)` before accessing `.src` or `.naturalWidth`.
 - **`floorId` can be null** — unassigned nodes show on all floor tabs in the editor and on all floor views in the minimap. Always use `node.floorId || null` when reading.
-- **Undo stack covers only map positions/connections** — does NOT undo node add/delete. Stacks reset when the map editor opens or closes.
+- **Undo stack covers only map positions/connections** — does NOT undo node add/delete. Stacks reset when the map editor opens or closes. `applySnapshot()` filters restored connections to exclude node IDs that no longer exist.
+- **`sanitizeRouteData()`** — runs on `loadRoutes()`, `loadFromBaked()`, and `importRoutes()`. Validates connections against valid node IDs, filters invalid hotspot types, and removes link-type hotspots targeting non-existent nodes.
 - **Cross-floor connections are stored in `connections[]`** — no special handling needed in `buildHotspots()`. In `drawMapEditor()`, same-floor connections draw lines; cross-floor connections draw a `↕` badge on both endpoints.
 - **`route.floors` always has at least one entry** — `openMapEditor()` defensively adds the default if missing (handles old saves).
 
