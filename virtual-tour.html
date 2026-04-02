@@ -2704,9 +2704,10 @@ function mapSnapshot() {
 }
 function applySnapshot(snap) {
   const nodes = currentNodes();
+  const currentIds = new Set(nodes.map(nd => nd.id));
   snap.forEach(s => {
     const n = nodes.find(nd => nd.id === s.id);
-    if (n) { n.mapX = s.mapX; n.mapY = s.mapY; n.connections = [...s.connections]; }
+    if (n) { n.mapX = s.mapX; n.mapY = s.mapY; n.connections = s.connections.filter(id => currentIds.has(id)); }
   });
 }
 function pushUndo() {
@@ -3552,6 +3553,8 @@ function sanitizeRouteData(rd) {
 
     const hBefore = nd.hotspots.length;
     nd.hotspots = nd.hotspots.filter(h => VALID_HOTSPOT_TYPES.includes(h.type));
+    // Remove link-type hotspots pointing at non-existent nodes
+    nd.hotspots = nd.hotspots.filter(h => h.type !== 'link' || validIds.has(h.content));
     droppedHotspots += hBefore - nd.hotspots.length;
   });
 
@@ -3754,7 +3757,10 @@ async function importRoutes(file) {
     const promises = [];
     const imported = [];
     let failedImageCount = 0;
+    let totalSanitizeDropped = 0;
     data.routes.forEach(rd => {
+      const { droppedConnections, droppedHotspots } = sanitizeRouteData(rd);
+      totalSanitizeDropped += droppedConnections + droppedHotspots;
       const route = { id: uid('R'), name: rd.name, desc: rd.desc || '', documents: (rd.documents || []).map(d => ({...d})), nodes: [], floors: [] };
       if (rd.floors && rd.floors.length) {
         rd.floors.forEach(f => {
@@ -3805,7 +3811,8 @@ async function importRoutes(file) {
     hideLoader();
     const names = imported.map(r => `  • ${r.name} (${r.nodes.length} node${r.nodes.length !== 1 ? 's' : ''})`).join('\n');
     const failMsg = failedImageCount ? `\n\n⚠ ${failedImageCount} image(s) failed to load.` : '';
-    alert(`Imported ${imported.length} route(s):\n${names}${failMsg}`);
+    const sanitizeMsg = totalSanitizeDropped ? `\n\n⚠ ${totalSanitizeDropped} invalid connection(s)/hotspot(s) were removed automatically.` : '';
+    alert(`Imported ${imported.length} route(s):\n${names}${failMsg}${sanitizeMsg}`);
   } catch (e) {
     hideLoader();
     alert('Import failed: ' + e.message);

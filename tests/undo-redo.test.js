@@ -82,13 +82,48 @@ describe('applySnapshot', () => {
   });
 
   it('connections array on node is a copy not the snapshot reference', () => {
-    const nodes = makeNodes([{ connections: [] }]);
-    const snap = [{ id: 'N01', mapX: 0, mapY: 0, connections: ['N02'] }];
+    const nodes = makeNodes([{ connections: [] }, { connections: [] }]);
+    const snap = [
+      { id: 'N01', mapX: 0, mapY: 0, connections: ['N02'] },
+      { id: 'N02', mapX: 0, mapY: 0, connections: ['N01'] }
+    ];
     applySnapshot(nodes, snap);
     // Mutate the snapshot entry after apply
     snap[0].connections.push('N03');
     // Node's connections should be unaffected
     expect(nodes[0].connections).toEqual(['N02']);
+  });
+
+  it('filters out stale connection IDs not present in current nodes', () => {
+    // Snapshot references N03, but current nodes only have N01 and N02
+    const nodes = makeNodes([
+      { mapX: 0, mapY: 0, connections: [] },
+      { mapX: 0, mapY: 0, connections: [] }
+    ]);
+    const snap = [
+      { id: 'N01', mapX: 10, mapY: 10, connections: ['N02', 'N03'] },
+      { id: 'N02', mapX: 20, mapY: 20, connections: ['N01', 'N03'] }
+    ];
+    applySnapshot(nodes, snap);
+    expect(nodes[0].connections).toEqual(['N02']);
+    expect(nodes[1].connections).toEqual(['N01']);
+  });
+
+  it('preserves all connections when all referenced IDs exist', () => {
+    const nodes = makeNodes([
+      { mapX: 0, mapY: 0, connections: [] },
+      { mapX: 0, mapY: 0, connections: [] },
+      { mapX: 0, mapY: 0, connections: [] }
+    ]);
+    const snap = [
+      { id: 'N01', mapX: 5, mapY: 5, connections: ['N02', 'N03'] },
+      { id: 'N02', mapX: 15, mapY: 15, connections: ['N01'] },
+      { id: 'N03', mapX: 25, mapY: 25, connections: ['N01'] }
+    ];
+    applySnapshot(nodes, snap);
+    expect(nodes[0].connections).toEqual(['N02', 'N03']);
+    expect(nodes[1].connections).toEqual(['N01']);
+    expect(nodes[2].connections).toEqual(['N01']);
   });
 });
 

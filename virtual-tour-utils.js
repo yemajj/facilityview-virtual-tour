@@ -316,12 +316,13 @@ export function mapSnapshot(nodes) {
 export function applySnapshot(nodes, snapshot) {
   const byId = {};
   for (const s of snapshot) byId[s.id] = s;
+  const currentIds = new Set(nodes.map(n => n.id));
   for (const n of nodes) {
     const s = byId[n.id];
     if (!s) continue;
     n.mapX = s.mapX;
     n.mapY = s.mapY;
-    n.connections = [...s.connections];
+    n.connections = s.connections.filter(id => currentIds.has(id));
   }
 }
 
