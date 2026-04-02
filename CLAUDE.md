@@ -1,9 +1,18 @@
 # FacilityView — CLAUDE.md
 
+## Code Exploration Policy
+Always use jCodemunch-MCP tools — never fall back to Read, Grep, Glob, or Bash for code exploration.
+- Before reading a file: use get_file_outline or get_file_content
+- Before searching: use search_symbols or search_text
+- Before exploring structure: use get_file_tree or get_repo_outline
+- Call resolve_repo with the current directory first; if not indexed, call index_folder.
+
+---
+
 ## Project Overview
 FacilityView is a single-file HTML/CSS/JS virtual tour simulator for facility worker training. Users upload equirectangular panorama images, link them into named routes, and navigate between them in a Google Street View-style viewer.
 
-**The entire app lives in one file:** `virtual-tour.html` (~3,669 lines)
+**The entire app lives in one file:** `virtual-tour.html` (~3,680 lines)
 
 ---
 
@@ -11,8 +20,8 @@ FacilityView is a single-file HTML/CSS/JS virtual tour simulator for facility wo
 
 | Lines | Content |
 |---|---|
-| 1–420 | `<head>`: CSS styles (incl. floor tabs, hotspot icon types, quiz overlay, quiz score modal, quiz editor) |
-| 420–680 | HTML: header (incl. #btnQuizResults), sidebar, viewer (incl. #quizOverlay), map editor overlay |
+| 1–420 | `<head>`: CSS styles (incl. sidebar tabs, floor tabs, hotspot icon types, quiz overlay, quiz score modal, quiz editor) |
+| 420–680 | HTML: header (incl. #btnQuizResults), sidebar (tabs: Nodes/Docs views), viewer (incl. #quizOverlay), map editor overlay |
 | 680–900 | HTML: modals (add route, add node, edit node with connections+nav arrow color+quiz editor, hotspots, manage hotspots, quiz score #modalQuizScore) |
 | 900–990 | `<script>` open + all JS global state declarations + `HOTSPOT_ICONS`/`HOTSPOT_ICON_DEFAULTS` constants |
 | 990–1000 | Helper functions: `currentRoute()`, `currentNodes()` |
@@ -99,6 +108,8 @@ routes[] = [{
 | `updateHotspotPositions()` | Reposition hotspot overlays each frame via yaw/pitch math |
 | `drawMinimap()` | Render 2D position map; `toMM(nx,ny)` maps coords to canvas px; floor-aware (shows active node's floor) |
 | `toggleMinimapMinimize()` | Toggle ▼/▲ collapse of minimap canvas |
+| `switchSidebarView(mode)` | Switch sidebar between `'nodes'` and `'docs'` tabs; opens sidebar if collapsed; syncs `docPanelOpen` |
+| `toggleDocPanel()` | Legacy toggle — delegates to `switchSidebarView` |
 | `resizeCanvas()` | Sync canvas pixel dimensions to layout size |
 | `saveRoutes()` | Serialize routes[] → IndexedDB |
 | `loadRoutes()` | Deserialize IndexedDB → routes[] (reconstructs Images) |
@@ -214,6 +225,7 @@ quizResultsShown        // true after score modal auto-shown; prevents double-sh
 // Other
 db                      // IndexedDB handle
 sidebarOpen             // true when sidebar is expanded
+sidebarView             // 'nodes' | 'docs' — which tab is active in the sidebar
 ```
 
 ---
@@ -226,7 +238,9 @@ header
   .header-right   — Add Node, Add Hotspot (#btnAddHotspot), Settings gear, SAVED indicator (#savedIndicator)
 
 .main
-  .sidebar (#sidebar)   — collapsible; node list (#locationList) + upload buttons + #nodeCount
+  .sidebar (#sidebar)   — collapsible; two tabs at top (Nodes / Docs)
+    #sidebarNodesView     — nodes tab: search, #locationList, sidebar-bottom (upload + node count)
+    #sidebarDocsView      — docs tab: #docList, #docViewArea, #docPanelFooter (Add Document)
   .viewer-wrap (#viewerWrap)
     #panoramaCanvas       — main render target (WebGL or 2D)
     #fadeCanvas           — crossfade overlay (reads WebGL frame via preserveDrawingBuffer)

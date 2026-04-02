@@ -271,15 +271,16 @@
   .helper-arrow { position:absolute; width:28px; height:28px; transform-origin:center; pointer-events:none; opacity:0.28; transition:opacity 0.2s; }
   .helper-arrow svg { width:28px; height:28px; fill:#f0a500; display:block; }
 
-  /* ── DOC PANEL ── */
-  #docPanel { position:absolute; top:0; right:0; bottom:0; width:300px; background:var(--panel); border-left:1px solid var(--border); display:flex; flex-direction:column; transform:translateX(270px); transition:transform 0.3s cubic-bezier(0.4,0,0.2,1); z-index:16; pointer-events:all; }
-  #docPanel.expanded { transform:translateX(0); }
-  #docPanel.quiz-hidden { transform:translateX(100%); pointer-events:none; }
-  #docPanelTab { position:absolute; left:-30px; top:50%; transform:translateY(-50%); width:30px; background:var(--panel); border:1px solid var(--border); border-right:none; border-radius:4px 0 0 4px; cursor:pointer; display:flex; align-items:center; justify-content:center; padding:10px 0; writing-mode:vertical-rl; text-orientation:mixed; font-family:var(--mono); font-size:9px; letter-spacing:2px; color:var(--muted); gap:6px; user-select:none; }
-  #docPanelTab:hover { color:var(--text); }
-  #docPanelTab svg { width:13px; height:13px; fill:currentColor; transform:rotate(90deg); }
-  #docPanelHeader { display:flex; align-items:center; justify-content:space-between; padding:12px 14px 10px; border-bottom:1px solid var(--border); flex-shrink:0; }
-  #docPanelHeader .doc-panel-title { font-family:var(--cond); font-size:14px; font-weight:700; letter-spacing:2px; text-transform:uppercase; }
+  /* ── SIDEBAR TABS ── */
+  .sidebar-tabs { display:flex; flex-shrink:0; border-bottom:1px solid var(--border); }
+  .sidebar-tab { flex:1; background:transparent; border:none; border-bottom:2px solid transparent; margin-bottom:-1px; padding:9px 4px 7px; font-family:var(--mono); font-size:9px; letter-spacing:2px; text-transform:uppercase; color:var(--muted); cursor:pointer; display:flex; align-items:center; justify-content:center; gap:5px; transition:color 0.15s, border-color 0.15s; }
+  .sidebar-tab:hover { color:var(--text); }
+  .sidebar-tab.active { color:var(--accent); border-bottom-color:var(--accent); }
+  .sidebar-tab svg { width:11px; height:11px; fill:currentColor; }
+  #sidebarNodesView { display:flex; flex-direction:column; flex:1; overflow:hidden; }
+  #sidebarDocsView { flex-direction:column; flex:1; overflow:hidden; }
+
+  /* ── DOC PANEL (sidebar) ── */
   #docList { flex:1; overflow-y:auto; padding:6px 0; }
   .doc-item { display:flex; align-items:center; gap:10px; padding:9px 14px; cursor:pointer; border-bottom:1px solid rgba(255,255,255,0.04); transition:background 0.1s; }
   .doc-item:hover { background:rgba(255,255,255,0.04); }
@@ -621,27 +622,45 @@
 <div class="main">
   <!-- SIDEBAR -->
   <div class="sidebar" id="sidebar">
-    <div class="sidebar-header">
-      <span class="sidebar-title">Nodes</span>
-      <span class="sidebar-route-badge" id="sidebarRouteBadge">NO ROUTE</span>
+    <div class="sidebar-tabs">
+      <button class="sidebar-tab active" id="tabNodes" onclick="switchSidebarView('nodes')">
+        <svg viewBox="0 0 24 24"><path d="M4 8h4V4H4v4zm6 12h4v-4h-4v4zm-6 0h4v-4H4v4zm0-6h4v-4H4v4zm6 0h4v-4h-4v4zm6-16v4h4V4h-4zm-6 4h4V4h-4v4zm6 6h4v-4h-4v4zm0 6h4v-4h-4v4z"/></svg>
+        Nodes
+      </button>
+      <button class="sidebar-tab" id="tabDocs" onclick="switchSidebarView('docs')">
+        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM8 12h8v2H8v-2zm0 4h5v2H8v-2zm0-8h3v2H8V8z"/></svg>
+        Docs
+      </button>
     </div>
-    <div style="padding:4px 10px;border-bottom:1px solid var(--border);">
-      <input type="text" id="sidebarSearch" placeholder="Filter nodes..." style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:10px;padding:5px 8px;outline:none;letter-spacing:1px;" oninput="filterSidebarNodes(this.value)">
-    </div>
-    <div class="location-list" id="locationList">
-      <div style="padding:20px 14px;font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.8;letter-spacing:1px;">
-        Create or select a route, then add panorama nodes.
+    <div id="sidebarNodesView">
+      <div class="sidebar-header" style="padding:6px 14px;">
+        <span class="sidebar-route-badge" id="sidebarRouteBadge">NO ROUTE</span>
+      </div>
+      <div style="padding:4px 10px;border-bottom:1px solid var(--border);">
+        <input type="text" id="sidebarSearch" placeholder="Filter nodes..." style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:3px;color:var(--text);font-family:var(--mono);font-size:10px;padding:5px 8px;outline:none;letter-spacing:1px;" oninput="filterSidebarNodes(this.value)">
+      </div>
+      <div class="location-list" id="locationList">
+        <div style="padding:20px 14px;font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.8;letter-spacing:1px;">
+          Create or select a route, then add panorama nodes.
+        </div>
+      </div>
+      <div class="sidebar-bottom">
+        <input type="file" id="fileInput" accept="image/*">
+        <input type="file" id="floorplanInput" accept="image/*">
+        <input type="file" id="importInput" accept=".json" style="display:none">
+        <button class="upload-btn" onclick="triggerAddNode()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM8 13h3v3h2v-3h3l-4-4-4 4z"/></svg>
+          Add Node
+        </button>
+        <div class="node-count"><span id="nodeCountVal">0</span> nodes in route</div>
       </div>
     </div>
-    <div class="sidebar-bottom">
-      <input type="file" id="fileInput" accept="image/*">
-      <input type="file" id="floorplanInput" accept="image/*">
-      <input type="file" id="importInput" accept=".json" style="display:none">
-      <button class="upload-btn" onclick="triggerAddNode()">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM8 13h3v3h2v-3h3l-4-4-4 4z"/></svg>
-        Add Node
-      </button>
-      <div class="node-count"><span id="nodeCountVal">0</span> nodes in route</div>
+    <div id="sidebarDocsView" style="display:none;flex-direction:column;flex:1;overflow:hidden;">
+      <div id="docList"></div>
+      <div id="docViewArea"></div>
+      <div id="docPanelFooter">
+        <button onclick="openAddDocModal()">+ Add Document</button>
+      </div>
     </div>
   </div>
 
@@ -743,25 +762,6 @@
 
     <div id="hotspots" style="position:absolute;inset:0;pointer-events:none;"></div>
     <div id="helperArrows" style="position:absolute;inset:0;pointer-events:none;z-index:12;overflow:hidden;"></div>
-
-    <!-- DOCUMENTS PANEL -->
-    <div id="docPanel">
-      <div id="docPanelTab" onclick="toggleDocPanel()" title="SOPs / Documents (D)">
-        <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM8 12h8v2H8v-2zm0 4h5v2H8v-2zm0-8h3v2H8V8z"/></svg>
-        DOCS
-      </div>
-      <div id="docPanelHeader">
-        <span class="doc-panel-title">Documents</span>
-        <button onclick="toggleDocPanel()" style="background:none;border:none;cursor:pointer;color:var(--muted);padding:2px;display:flex;align-items:center;" title="Close">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
-        </button>
-      </div>
-      <div id="docList"></div>
-      <div id="docViewArea"></div>
-      <div id="docPanelFooter">
-        <button onclick="openAddDocModal()">+ Add Document</button>
-      </div>
-    </div>
 
     <div id="hotspotInfoPopup">
       <div id="hotspotInfoTitle"></div>
@@ -1450,7 +1450,7 @@ function selectRoute(idx) {
   document.getElementById('sidebarRouteBadge').textContent = route ? route.name : 'NO ROUTE';
   document.getElementById('routeSelect').value = idx;
   buildSidebar(); drawMinimap(); updateNodeCount();
-  if (docPanelOpen) buildDocList();
+  if (sidebarView === 'docs') buildDocList();
   document.getElementById('overlay').style.opacity = '0';
   document.getElementById('hotspots').style.opacity = '0';
   clearViewer();
@@ -3805,14 +3805,26 @@ document.addEventListener('keydown', e => {
 // DOCUMENTS / SOP PANEL
 // ══════════════════════════════════════════════════
 let docPanelOpen = false;
+let sidebarView = 'nodes'; // 'nodes' | 'docs'
 let _editingDocId = null;
 let _pendingDocFile = null;
 
+function switchSidebarView(mode) {
+  sidebarView = mode;
+  docPanelOpen = mode === 'docs';
+  if (!sidebarOpen) toggleSidebar();
+  document.getElementById('sidebarNodesView').style.display = mode === 'nodes' ? '' : 'none';
+  const docsEl = document.getElementById('sidebarDocsView');
+  docsEl.style.display = mode === 'docs' ? 'flex' : 'none';
+  document.getElementById('tabNodes').classList.toggle('active', mode === 'nodes');
+  document.getElementById('tabDocs').classList.toggle('active', mode === 'docs');
+  const btn = document.getElementById('btnDocs');
+  if (btn) btn.classList.toggle('hotspot-edit-active', mode === 'docs');
+  if (mode === 'docs') buildDocList();
+}
+
 function toggleDocPanel() {
-  docPanelOpen = !docPanelOpen;
-  document.getElementById('docPanel').classList.toggle('expanded', docPanelOpen);
-  document.getElementById('btnDocs').classList.toggle('hotspot-edit-active', docPanelOpen);
-  if (docPanelOpen) buildDocList();
+  switchSidebarView(docPanelOpen ? 'nodes' : 'docs');
 }
 
 function buildDocList() {
@@ -3944,12 +3956,12 @@ document.addEventListener('DOMContentLoaded', () => {});
   });
 })();
 
-// 'D' key shortcut to toggle doc panel
+// 'D' key shortcut to toggle docs view in sidebar
 document.addEventListener('keydown', e => {
   if ((e.key === 'd' || e.key === 'D') && !e.ctrlKey && !e.metaKey && !e.altKey
       && document.activeElement.tagName !== 'INPUT' && document.activeElement.tagName !== 'TEXTAREA'
       && !document.querySelector('.modal-bg.open')) {
-    toggleDocPanel();
+    switchSidebarView(sidebarView === 'docs' ? 'nodes' : 'docs');
   }
 });
 
@@ -3999,7 +4011,6 @@ function showQuizQuestion(node) {
   fb.className = '';
   document.getElementById('quizContinueBtn').style.display = 'none';
   document.getElementById('quizOverlay').style.display = 'flex';
-  document.getElementById('docPanel').classList.add('quiz-hidden');
   // Keyboard A/B/C/D shortcut handler
   if (window._quizKeyHandler) document.removeEventListener('keydown', window._quizKeyHandler);
   window._quizKeyHandler = e => {
@@ -4046,7 +4057,6 @@ function submitQuizAnswer(node, selectedIdx) {
 function closeQuizOverlay() {
   if (window._quizKeyHandler) { document.removeEventListener('keydown', window._quizKeyHandler); window._quizKeyHandler = null; }
   document.getElementById('quizOverlay').style.display = 'none';
-  document.getElementById('docPanel').classList.remove('quiz-hidden');
   // Show score if at last node and results not yet shown
   const nodes = currentNodes();
   if (currentNodeIdx === nodes.length - 1 && !quizResultsShown) {
