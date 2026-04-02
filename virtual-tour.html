@@ -300,7 +300,21 @@
   #docPanelFooter { padding:10px 14px; border-top:1px solid var(--border); flex-shrink:0; }
   #docPanelFooter button { width:100%; padding:8px; background:rgba(255,255,255,0.05); border:1px solid var(--border); border-radius:3px; color:var(--text); font-family:var(--mono); font-size:10px; letter-spacing:1px; cursor:pointer; transition:background 0.15s; }
   #docPanelFooter button:hover { background:rgba(255,255,255,0.1); }
-  #docViewArea { padding:14px; flex:1; overflow-y:auto; font-family:var(--sans); font-size:13px; line-height:1.6; white-space:pre-wrap; word-break:break-word; display:none; }
+  #docViewArea { padding:14px; flex:1; min-height:0; overflow-y:auto; font-family:var(--sans); font-size:13px; line-height:1.6; white-space:pre-wrap; word-break:break-word; display:none; }
+  #docViewArea.doc-viewer-embed { padding:0; overflow:hidden; display:flex; flex-direction:column; }
+  .doc-view-toolbar { flex-shrink:0; display:flex; align-items:center; gap:10px; padding:8px 12px; border-bottom:1px solid var(--border); background:rgba(0,0,0,0.25); }
+  .doc-view-back { background:none; border:none; cursor:pointer; color:var(--muted); padding:4px; display:flex; align-items:center; border-radius:4px; flex-shrink:0; }
+  .doc-view-back:hover { color:var(--accent); }
+  .doc-view-title { font-family:var(--cond); font-size:14px; font-weight:700; flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .doc-view-open-tab { margin-left:auto; font-family:var(--mono); font-size:9px; letter-spacing:1px; text-transform:uppercase; color:var(--accent2); background:rgba(34,211,238,0.08); border:1px solid var(--border); border-radius:3px; padding:5px 10px; cursor:pointer; flex-shrink:0; }
+  .doc-view-open-tab:hover { border-color:var(--accent2); background:rgba(34,211,238,0.12); }
+  .doc-view-frame-wrap { flex:1; min-height:0; display:flex; flex-direction:column; position:relative; background:#0a0c12; }
+  .doc-view-iframe { flex:1; min-height:0; width:100%; border:none; background:#1a1d28; }
+  .doc-view-scroll { flex:1; min-height:0; overflow:auto; padding:12px; -webkit-overflow-scrolling:touch; }
+  .doc-view-img { max-width:100%; height:auto; display:block; margin:0 auto; }
+  .doc-view-text-pre { margin:0; font-family:var(--mono); font-size:11px; line-height:1.55; white-space:pre-wrap; word-break:break-word; color:var(--text); }
+  .doc-view-fallback { flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:20px; text-align:center; }
+  .doc-view-fallback p { color:var(--muted); font-size:12px; line-height:1.6; max-width:260px; margin:0; }
   body.kiosk-mode #docPanelFooter { display:none; }
   body.viewer-mode #docPanelFooter { display:none; }
 
@@ -1459,7 +1473,7 @@ function openNewRouteModal() {
 function confirmNewRoute() {
   const name = document.getElementById('newRouteName').value.trim();
   if (!name) { document.getElementById('newRouteName').focus(); return; }
-  const route = { id:uid('R'), name, desc:document.getElementById('newRouteDesc').value.trim(), nodes:[], floors:[{id:'F0',name:'Floor 1',image:null}] };
+  const route = { id:uid('R'), name, desc:document.getElementById('newRouteDesc').value.trim(), documents:[], nodes:[], floors:[{id:'F0',name:'Floor 1',image:null}] };
   routes.push(route);
   closeModal('modalNewRoute');
   rebuildRouteSelect();
@@ -3519,6 +3533,10 @@ function sanitizeRouteData(rd) {
     console.warn('sanitizeRouteData: floors missing or empty, adding default');
     rd.floors = [{ id: 'F0', name: 'Floor 1', imageSrc: null }];
   }
+  if (!Array.isArray(rd.documents)) {
+    console.warn('sanitizeRouteData: documents not an array, resetting');
+    rd.documents = [];
+  }
 
   const validIds = new Set(rd.nodes.filter(n => typeof n.id === 'string').map(n => n.id));
   rd.nodes.forEach(nd => {
@@ -3638,7 +3656,7 @@ async function loadFromBaked(data) {
   (data.routes || []).forEach(rd => {
     const { droppedConnections, droppedHotspots } = sanitizeRouteData(rd);
     totalDropped += droppedConnections + droppedHotspots;
-    const route = { id: rd.id, name: rd.name, desc: rd.desc || '', nodes: [], floors: [] };
+    const route = { id: rd.id, name: rd.name, desc: rd.desc || '', documents: (rd.documents || []).map(d => ({ ...d })), nodes: [], floors: [] };
     (rd.floors || [{ id: 'F0', name: 'Floor 1', imageSrc: null }]).forEach(f => {
       const fl = { id: f.id, name: f.name, image: null };
       if (f.imageSrc) {
@@ -3932,6 +3950,8 @@ function buildDocList() {
   const docs = (route && route.documents) ? route.documents : [];
   const list = document.getElementById('docList');
   const viewArea = document.getElementById('docViewArea');
+  viewArea.classList.remove('doc-viewer-embed');
+  viewArea.innerHTML = '';
   viewArea.style.display = 'none';
   list.style.display = '';
   if (!docs.length) {
@@ -3968,6 +3988,36 @@ function buildDocList() {
   });
 }
 
+function docMimeFromDoc(doc) {
+  if (doc.mimeType && typeof doc.mimeType === 'string') return doc.mimeType.split(';')[0].trim().toLowerCase();
+  const c = doc.content || '';
+  if (c.startsWith('data:')) {
+    const m = c.match(/^data:([^;,]+)/i);
+    if (m) return m[1].trim().toLowerCase();
+  }
+  const fn = (doc.filename || '').toLowerCase();
+  if (fn.endsWith('.pdf')) return 'application/pdf';
+  if (fn.endsWith('.png')) return 'image/png';
+  if (fn.endsWith('.jpg') || fn.endsWith('.jpeg')) return 'image/jpeg';
+  if (fn.endsWith('.gif')) return 'image/gif';
+  if (fn.endsWith('.webp')) return 'image/webp';
+  if (fn.endsWith('.svg')) return 'image/svg+xml';
+  if (fn.endsWith('.txt') || fn.endsWith('.csv') || fn.endsWith('.md') || fn.endsWith('.log') || fn.endsWith('.json') || fn.endsWith('.xml')) return 'text/plain';
+  return '';
+}
+/** Returns how to show a file attachment: image | pdf | text | link_only | none */
+function docEmbedKind(doc, src) {
+  if (!src || (!src.startsWith('data:') && !isSafeUrl(src))) return 'none';
+  const mime = docMimeFromDoc(doc);
+  const fn = (doc.filename || '').toLowerCase();
+  const looksPdf = mime === 'application/pdf' || /^data:application\/pdf/i.test(src) || /\.pdf($|[?#])/i.test(fn) || /\.pdf($|[?#])/i.test(src);
+  const looksImage = mime.startsWith('image/') || /^data:image\//i.test(src);
+  const looksText = (mime.startsWith('text/') && mime !== 'text/html') || mime === 'application/json' || /^data:text\//i.test(src);
+  if (looksImage) return 'image';
+  if (looksPdf) return 'pdf';
+  if (looksText) return 'text';
+  return 'link_only';
+}
 function viewDocument(docId) {
   const route = currentRoute();
   const doc = (route && route.documents || []).find(d => d.id === docId);
@@ -3975,6 +4025,7 @@ function viewDocument(docId) {
   const list = document.getElementById('docList');
   const viewArea = document.getElementById('docViewArea');
   if (doc.type === 'text') {
+    viewArea.classList.remove('doc-viewer-embed');
     list.style.display = 'none';
     viewArea.style.display = '';
     viewArea.innerHTML = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;flex-shrink:0;">
@@ -3983,10 +4034,69 @@ function viewDocument(docId) {
       </button>
       <strong style="font-family:var(--cond);font-size:14px;">${escapeHtml(doc.title)}</strong>
     </div><div>${escapeHtml(doc.content)}</div>`;
-  } else {
-    // File — open in new tab
-    if (doc.content && (doc.content.startsWith('data:') || isSafeUrl(doc.content))) window.open(doc.content, '_blank');
+    return;
   }
+  const src = doc.content;
+  const kind = docEmbedKind(doc, src);
+  if (kind === 'none') return;
+  list.style.display = 'none';
+  viewArea.classList.add('doc-viewer-embed');
+  viewArea.style.display = 'flex';
+  viewArea.replaceChildren();
+
+  const toolbar = document.createElement('div');
+  toolbar.className = 'doc-view-toolbar';
+  const backBtn = document.createElement('button');
+  backBtn.type = 'button';
+  backBtn.className = 'doc-view-back';
+  backBtn.title = 'Back to list';
+  backBtn.innerHTML = '<svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor"><path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20v-2z"/></svg>';
+  backBtn.addEventListener('click', () => buildDocList());
+  const titleEl = document.createElement('strong');
+  titleEl.className = 'doc-view-title';
+  titleEl.textContent = doc.title;
+  const openTab = document.createElement('button');
+  openTab.type = 'button';
+  openTab.className = 'doc-view-open-tab';
+  openTab.textContent = 'Open in tab';
+  openTab.addEventListener('click', () => window.open(src, '_blank', 'noopener,noreferrer'));
+  toolbar.append(backBtn, titleEl, openTab);
+
+  const wrap = document.createElement('div');
+  wrap.className = 'doc-view-frame-wrap';
+  if (kind === 'image') {
+    const sc = document.createElement('div');
+    sc.className = 'doc-view-scroll';
+    const img = document.createElement('img');
+    img.className = 'doc-view-img';
+    img.alt = doc.title;
+    img.src = src;
+    sc.appendChild(img);
+    wrap.appendChild(sc);
+  } else if (kind === 'pdf') {
+    const iframe = document.createElement('iframe');
+    iframe.className = 'doc-view-iframe';
+    iframe.title = doc.title;
+    iframe.src = src;
+    wrap.appendChild(iframe);
+  } else if (kind === 'text') {
+    const sc = document.createElement('div');
+    sc.className = 'doc-view-scroll';
+    const pre = document.createElement('pre');
+    pre.className = 'doc-view-text-pre';
+    pre.textContent = 'Loading…';
+    sc.appendChild(pre);
+    wrap.appendChild(sc);
+    fetch(src).then(r => r.text()).then(t => { pre.textContent = t; }).catch(() => { pre.textContent = 'Could not load this document as text.'; });
+  } else {
+    const fb = document.createElement('div');
+    fb.className = 'doc-view-fallback';
+    const p = document.createElement('p');
+    p.textContent = 'Inline preview is not available for this file type (for example Office documents). Use Open in tab to view or download.';
+    fb.appendChild(p);
+    wrap.appendChild(fb);
+  }
+  viewArea.append(toolbar, wrap);
 }
 
 function deleteDocument(docId) {
@@ -4031,7 +4141,9 @@ function confirmAddDoc() {
   const route = currentRoute();
   if (!route) return;
   route.documents = route.documents || [];
-  route.documents.push({ id: uid('D'), title, type, content, filename });
+  const docRow = { id: uid('D'), title, type, content, filename: filename || null };
+  if (type === 'file' && _pendingDocFile && _pendingDocFile.mimeType) docRow.mimeType = _pendingDocFile.mimeType;
+  route.documents.push(docRow);
   _pendingDocFile = null;
   closeModal('modalAddDoc');
   buildDocList();
@@ -4048,7 +4160,7 @@ document.addEventListener('DOMContentLoaded', () => {});
     if (file.size > 20 * 1024 * 1024) { alert('File too large (max 20 MB).'); fi.value = ''; return; }
     const reader = new FileReader();
     reader.onload = ev => {
-      _pendingDocFile = { dataUrl: ev.target.result, filename: file.name };
+      _pendingDocFile = { dataUrl: ev.target.result, filename: file.name, mimeType: file.type || '' };
       document.getElementById('docFileLabel').textContent = file.name;
     };
     reader.readAsDataURL(file);
