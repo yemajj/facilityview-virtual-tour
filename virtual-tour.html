@@ -262,6 +262,8 @@
   .hotspot-pin.quiz-type svg { color:#e040fb; }
   .hotspot.nav-arrow-custom .hotspot-arrow { outline:2px dashed rgba(240,165,0,0.5); outline-offset:2px; }
   .hotspot.nav-arrow-dragging { cursor:grabbing !important; opacity:0.7; }
+  .helper-arrow { position:absolute; width:28px; height:28px; transform-origin:center; pointer-events:none; opacity:0.28; transition:opacity 0.2s; }
+  .helper-arrow svg { width:28px; height:28px; fill:#f0a500; display:block; }
 
   /* MODAL BASE */
   .modal-bg { position:fixed; inset:0; background:rgba(0,0,0,0.75); z-index:200; display:flex; align-items:center; justify-content:center; backdrop-filter:blur(6px); opacity:0; pointer-events:none; transition:opacity 0.2s; }
@@ -702,6 +704,7 @@
     </div>
 
     <div id="hotspots" style="position:absolute;inset:0;pointer-events:none;"></div>
+    <div id="helperArrows" style="position:absolute;inset:0;pointer-events:none;z-index:12;overflow:hidden;"></div>
     <div id="hotspotInfoPopup">
       <div id="hotspotInfoTitle"></div>
       <div id="hotspotInfoText"></div>
@@ -936,6 +939,13 @@
       <span>On</span>
     </label>
   </div>
+  <div class="settings-row">
+    <span class="settings-label">Direction Hints</span>
+    <label class="settings-toggle">
+      <input type="checkbox" id="helperArrowToggle" checked onchange="helperArrowsEnabled=this.checked;updateHelperArrows()">
+      <span>On</span>
+    </label>
+  </div>
 </div>
 
 <div class="modal-bg" id="modalAddHotspot" role="dialog" aria-modal="true" aria-label="Add Hotspot">
@@ -1166,6 +1176,7 @@ let sessionStartTime = null;   // ISO string — set on first navigateTo() call
 // Settings & inertia
 let sensitivityLevel = 3;         // 1–10 slider value
 let inertiaEnabled = true;
+let helperArrowsEnabled = true;
 let velX = 0, velY = 0;           // current drag velocity (rad/frame)
 let inertiaId = null;             // rAF handle
 let settingsOpen = false;
@@ -1954,7 +1965,7 @@ function renderFrame() {
     }
     ctx.putImageData(imageData, 0, 0);
   }
-  updateHUD(); updateHotspotPositions();
+  updateHUD(); updateHotspotPositions(); updateHelperArrows();
   drawMinimap(true); // live update for direction arrow (lightweight)
 }
 function scheduleRender() {
@@ -2139,6 +2150,7 @@ function buildHotspots(index) {
     });
   }
   updateHotspotPositions();
+  updateHelperArrows();
 }
 function updateHotspotPositions() {
   const W = canvas.width, H = canvas.height;
@@ -2171,7 +2183,87 @@ function updateHotspotPositions() {
 }
 
 // ══════════════════════════════════════════════════
-// MINIMAP — with live direction arrow
+// HELPER ARROWS — faint edge arrows pointing toward off-screen nav targets
+// ══════════════════════════════════════════════════
+const _helperArrowSvg = `<svg viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg>`;
+function updateHelperArrows() {
+  const container = document.getElementById('helperArrows');
+  if (!container) return;
+  const nodes = currentNodes();
+  const current = nodes[currentNodeIdx];
+  if (!current || !helperArrowsEnabled || document.getElementById('quizOverlay').style.display === 'flex') {
+    container.innerHTML = '';
+    return;
+  }
+  const W = canvas.width, H = canvas.height;
+  if (!W || !H) return;
+  const fovRad = fov * Math.PI / 180;
+  const halfFov = fovRad / 2, halfFovV = halfFov / (W / H);
+  const pad = 22; // px from edge
+  const overrides = current.connectionOverrides || {};
+
+  // Build list of connections with angles
+  const connAngles = [];
+  (current.connections || []).forEach(targetId => {
+    const target = nodes.find(n => n.id === targetId);
+    if (!target) return;
+    const ov = overrides[targetId];
+    let worldYaw;
+    if (ov && ov.customYaw !== null && ov.customYaw !== undefined) {
+      worldYaw = ov.customYaw;
+    } else if (current.mapX !== null && target.mapX !== null) {
+      worldYaw = Math.atan2(target.mapX - current.mapX, -(target.mapY - current.mapY));
+    } else {
+      return; // unplaced, skip
+    }
+    const worldPitch = (ov && ov.customPitch !== null && ov.customPitch !== undefined) ? ov.customPitch : -0.12;
+    connAngles.push({ targetId, worldYaw, worldPitch });
+  });
+
+  // Sync DOM elements (one per connection)
+  while (container.children.length > connAngles.length) container.removeChild(container.lastChild);
+  while (container.children.length < connAngles.length) {
+    const d = document.createElement('div');
+    d.className = 'helper-arrow';
+    d.innerHTML = _helperArrowSvg;
+    container.appendChild(d);
+  }
+
+  connAngles.forEach((c, i) => {
+    const el = container.children[i];
+    const relYaw  = c.worldYaw - yaw;
+    const normYaw = ((relYaw + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+    const relPitch = c.worldPitch - pitch;
+    const visible  = Math.abs(normYaw) < halfFov * 0.88 && Math.abs(relPitch) < halfFovV;
+    if (visible) { el.style.display = 'none'; return; }
+    el.style.display = 'block';
+
+    // Project arrow position onto viewport edge
+    // Compute unclamped screen coords then clamp to edge
+    const rawX = W / 2 + (normYaw / halfFov) * W / 2;
+    const rawY = H / 2 - (relPitch / halfFovV) * H / 2;
+    const cx = W / 2, cy = H / 2;
+    const dx = rawX - cx, dy = rawY - cy;
+    const angle = Math.atan2(dy, dx); // angle from center toward target
+    // Clamp to rectangle boundary
+    const hw = W / 2 - pad, hh = H / 2 - pad;
+    const scaleX = hw / Math.abs(dx || 1), scaleY = hh / Math.abs(dy || 1);
+    const scale = Math.min(scaleX, scaleY, 1);
+    const edgeX = cx + dx * scale;
+    const edgeY = cy + dy * scale;
+
+    const sz = 28;
+    const ex = Math.round(edgeX - sz / 2);
+    const ey = Math.round(edgeY - sz / 2);
+    const rot = angle * (180 / Math.PI); // rotate SVG arrow to point toward target
+
+    if (el._haX !== ex) { el.style.left = ex + 'px'; el._haX = ex; }
+    if (el._haY !== ey) { el.style.top  = ey + 'px'; el._haY = ey; }
+    if (el._haR !== rot) { el.style.transform = `rotate(${rot}deg)`; el._haR = rot; }
+  });
+}
+
+
 // ══════════════════════════════════════════════════
 function toggleMinimapMinimize() {
   const widget = document.getElementById('minimapWidget');
