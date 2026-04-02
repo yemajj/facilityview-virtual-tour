@@ -3,6 +3,12 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#0b0d14">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="FacilityView">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'%3E%3Crect width='192' height='192' rx='32' fill='%230b0d14'/%3E%3Ccircle cx='96' cy='96' r='56' fill='none' stroke='%237c6fef' stroke-width='8'/%3E%3Ccircle cx='96' cy='96' r='16' fill='%237c6fef'/%3E%3Cpath d='M96 40 L96 56 M96 136 L96 152 M40 96 L56 96 M136 96 L152 96' stroke='%237c6fef' stroke-width='6' stroke-linecap='round'/%3E%3C/svg%3E">
+<link rel="manifest" id="pwaManifest">
 <title>FacilityView — Virtual Tour Simulator</title>
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow:wght@300;400;600;700&family=Barlow+Condensed:wght@400;700&display=swap');
@@ -4582,7 +4588,62 @@ function hideLoader() {
 // ══════════════════════════════════════════════════
 // INIT
 // ══════════════════════════════════════════════════
+// ══════════════════════════════════════════════════
+// PWA — manifest + service worker registration
+// ══════════════════════════════════════════════════
+function setupPWA() {
+  // Inline manifest via data URI (single-file app — no companion files)
+  const iconSvg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192"><rect width="192" height="192" rx="32" fill="#0b0d14"/><circle cx="96" cy="96" r="56" fill="none" stroke="#7c6fef" stroke-width="8"/><circle cx="96" cy="96" r="16" fill="#7c6fef"/><path d="M96 40 L96 56 M96 136 L96 152 M40 96 L56 96 M136 96 L152 96" stroke="#7c6fef" stroke-width="6" stroke-linecap="round"/></svg>`;
+  const iconDataUri = 'data:image/svg+xml,' + encodeURIComponent(iconSvg);
+  const manifest = {
+    name: 'FacilityView Virtual Tour',
+    short_name: 'FacilityView',
+    description: 'Virtual tour simulator for facility worker training',
+    start_url: './',
+    display: 'standalone',
+    background_color: '#0b0d14',
+    theme_color: '#0b0d14',
+    icons: [
+      { src: iconDataUri, sizes: 'any', type: 'image/svg+xml', purpose: 'any maskable' }
+    ]
+  };
+  const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+  const manifestUrl = URL.createObjectURL(manifestBlob);
+  const manifestLink = document.getElementById('pwaManifest');
+  if (manifestLink) manifestLink.href = manifestUrl;
+
+  // Service worker via blob URL (cache-first for offline support)
+  // Note: blob URL service workers work in Chromium-based browsers.
+  // On Firefox/Safari they may not register — app still works online.
+  if (!('serviceWorker' in navigator)) return;
+  const swCode = `
+    const CACHE = 'fv-v1';
+    const SW_URL = self.location.href;
+    self.addEventListener('install', e => {
+      e.waitUntil(caches.open(CACHE).then(c => c.add(SW_URL).catch(() => {})));
+      self.skipWaiting();
+    });
+    self.addEventListener('activate', e => { e.waitUntil(self.clients.claim()); });
+    self.addEventListener('fetch', e => {
+      if (e.request.method !== 'GET') return;
+      e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(res => {
+        if (res && res.status === 200 && res.type === 'basic') {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+        }
+        return res;
+      }).catch(() => caches.match(e.request))));
+    });
+  `;
+  try {
+    const swBlob = new Blob([swCode], { type: 'application/javascript' });
+    const swUrl = URL.createObjectURL(swBlob);
+    navigator.serviceWorker.register(swUrl, { scope: '/' }).catch(() => {});
+  } catch (e) { /* graceful degradation */ }
+}
+
 async function init() {
+  setupPWA();
   document.getElementById('overlay').style.opacity = '0';
   document.getElementById('hotspots').style.opacity = '0';
   initWebGL();
