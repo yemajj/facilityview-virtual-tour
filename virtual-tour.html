@@ -596,7 +596,7 @@
       <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
       Results
     </button>
-    <button class="btn-icon-text" id="btnSessionLog" onclick="openSessionLog()" style="display:none" title="View training session log">
+    <button class="btn-icon-text" id="btnSessionLog" onclick="FV.session.open()" style="display:none" title="View training session log">
       <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM8 13h3v3h2v-3h3l-4-4-4 4z"/></svg>
       Session Log
     </button>
@@ -1216,15 +1216,15 @@
     <div class="modal-title">Training Session Log</div>
     <div class="modal-sub" id="sessionLogMeta">— No session data —</div>
     <div id="sessionLogTabs" style="display:flex;gap:6px;margin-bottom:12px;">
-      <button class="modal-btn-cancel" id="tabAll"   onclick="filterSessionLog('all')"   style="padding:4px 12px;font-size:10px;">All</button>
-      <button class="modal-btn-cancel" id="tabVisit" onclick="filterSessionLog('visit')" style="padding:4px 12px;font-size:10px;">Visits</button>
-      <button class="modal-btn-cancel" id="tabQuiz"  onclick="filterSessionLog('quiz')"  style="padding:4px 12px;font-size:10px;">Quiz</button>
+      <button class="modal-btn-cancel" id="tabAll"   onclick="FV.session.filter('all')"   style="padding:4px 12px;font-size:10px;">All</button>
+      <button class="modal-btn-cancel" id="tabVisit" onclick="FV.session.filter('visit')" style="padding:4px 12px;font-size:10px;">Visits</button>
+      <button class="modal-btn-cancel" id="tabQuiz"  onclick="FV.session.filter('quiz')"  style="padding:4px 12px;font-size:10px;">Quiz</button>
     </div>
     <div id="sessionLogTable" style="max-height:360px;overflow-y:auto;font-family:var(--mono);font-size:11px;padding-right:4px;"></div>
     <div class="modal-actions">
-      <button class="modal-btn-cancel" onclick="clearSessionLog()">Clear Log</button>
+      <button class="modal-btn-cancel" onclick="FV.session.clear()">Clear Log</button>
       <button class="modal-btn-cancel" onclick="closeModal('modalSessionLog')">Close</button>
-      <button class="modal-btn-ok" onclick="exportSessionLogCSV()">Export CSV</button>
+      <button class="modal-btn-ok" onclick="FV.session.exportCSV()">Export CSV</button>
     </div>
   </div>
 </div>
@@ -1281,9 +1281,7 @@ let pendingHotspotFileData = null; // { dataUrl, filename } for image/file hotsp
 // Backward-compat shim: quizAnswered is an object reference so aliasing works
 // quizResultsShown uses getter/setter to stay in sync with FV.quiz.resultsShown
 
-// Training session log
-let sessionLog = [];           // { type, nodeId, nodeName, routeId, routeName, timestamp, ...quizFields }
-let sessionStartTime = null;   // ISO string — set on first navigateTo() call
+// Training session log — now managed by FV.session module (see below)
 
 // Settings & inertia
 let sensitivityLevel = 3;         // 1–10 slider value
@@ -1557,8 +1555,7 @@ function selectRoute(idx) {
   FV.quiz.resetSession();
   if (window._quizKeyHandler) { document.removeEventListener('keydown', window._quizKeyHandler); window._quizKeyHandler = null; }
   document.getElementById('quizOverlay').style.display = 'none';
-  sessionLog = []; sessionStartTime = null;
-  document.getElementById('btnSessionLog').style.display = 'none';
+  FV.session.reset();
   // Reset map editor state if switching route while editor closed
   mapSelectedNodeIdx = -1; mapConnectFirstNodeIdx = -1;
   const route = currentRoute();
@@ -2053,10 +2050,7 @@ function navigateTo(index) {
   if (img && img._pixelCache) { img._pixelCache = null; }
   currentNodeIdx = index;
   // Training session log: record visit
-  if (!sessionStartTime) sessionStartTime = new Date().toISOString();
-  sessionLog.push({ type: 'visit', nodeId: nodes[index].id, nodeName: nodes[index].name, routeId: currentRoute()?.id || '', routeName: currentRoute()?.name || '', timestamp: new Date().toISOString() });
-  if (sessionLog.length > 5000) sessionLog = sessionLog.slice(-2500); // cap memory growth
-  document.getElementById('btnSessionLog').style.display = '';
+  FV.session.logEvent({ type: 'visit', nodeId: nodes[index].id, nodeName: nodes[index].name, routeId: currentRoute()?.id || '', routeName: currentRoute()?.name || '', timestamp: new Date().toISOString() });
   img = nodes[index].image;
   document.getElementById('overlay').style.opacity = '1';
   const flash = document.getElementById('flash');
@@ -4273,7 +4267,7 @@ FV.quiz = {
     const correct = selectedIdx === q.correctIndex;
     FV.quiz.answered[node.id] = { selectedIdx, correct, correctIdx: q.correctIndex };
     // Training session log: record quiz answer
-    sessionLog.push({ type: 'quiz', nodeId: node.id, nodeName: node.name, routeId: currentRoute()?.id || '', routeName: currentRoute()?.name || '', timestamp: new Date().toISOString(), quizCorrect: correct, quizSelectedIdx: selectedIdx, quizCorrectIdx: q.correctIndex, quizQuestion: q.question, quizAnswerText: q.options[selectedIdx], quizCorrectText: q.options[q.correctIndex] });
+    FV.session.logEvent({ type: 'quiz', nodeId: node.id, nodeName: node.name, routeId: currentRoute()?.id || '', routeName: currentRoute()?.name || '', timestamp: new Date().toISOString(), quizCorrect: correct, quizSelectedIdx: selectedIdx, quizCorrectIdx: q.correctIndex, quizQuestion: q.question, quizAnswerText: q.options[selectedIdx], quizCorrectText: q.options[q.correctIndex] });
 
     // Disable all buttons and highlight correct / wrong
     const btns = document.querySelectorAll('.quiz-opt-btn');
@@ -4392,75 +4386,97 @@ function resetQuizSession() { FV.quiz.resetSession(); }
 function toggleQuizEditor() { FV.quiz.toggleEditor(); }
 
 // ══════════════════════════════════════════════════
-// TRAINING SESSION LOG
+// SESSION LOG MODULE (FV.session)
 // ══════════════════════════════════════════════════
-function openSessionLog() {
-  buildSessionLogTable('all');
-  openModal('modalSessionLog');
-}
+FV.session = {
+  log: [],              // { type, nodeId, nodeName, routeId, routeName, timestamp, ...quizFields }
+  startTime: null,      // ISO string — set on first navigateTo() call
 
-function buildSessionLogTable(filter) {
-  const meta  = document.getElementById('sessionLogMeta');
-  const table = document.getElementById('sessionLogTable');
-  if (!sessionLog.length) {
-    meta.textContent = 'No events recorded yet.';
-    table.innerHTML = '';
-    return;
+  reset() {
+    FV.session.log = [];
+    FV.session.startTime = null;
+    document.getElementById('btnSessionLog').style.display = 'none';
+  },
+
+  logEvent(entry) {
+    if (!FV.session.startTime) FV.session.startTime = new Date().toISOString();
+    FV.session.log.push(entry);
+    if (FV.session.log.length > 5000) FV.session.log = FV.session.log.slice(-2500);
+    document.getElementById('btnSessionLog').style.display = '';
+  },
+
+  open() {
+    FV.session.buildTable('all');
+    openModal('modalSessionLog');
+  },
+
+  buildTable(filter) {
+    const meta  = document.getElementById('sessionLogMeta');
+    const table = document.getElementById('sessionLogTable');
+    if (!FV.session.log.length) {
+      meta.textContent = 'No events recorded yet.';
+      table.innerHTML = '';
+      return;
+    }
+    const visits  = FV.session.log.filter(e => e.type === 'visit');
+    const quizzes = FV.session.log.filter(e => e.type === 'quiz');
+    const correct = quizzes.filter(e => e.quizCorrect).length;
+    const startFmt = FV.session.startTime ? new Date(FV.session.startTime).toLocaleTimeString() : '—';
+    meta.textContent = `Started: ${startFmt}  ·  ${visits.length} visits  ·  ${correct}/${quizzes.length} quiz correct`;
+    const entries = filter === 'visit' ? visits : filter === 'quiz' ? quizzes : FV.session.log;
+    if (!entries.length) {
+      table.innerHTML = `<div style="padding:16px;color:var(--muted);text-align:center;">No ${filter} events.</div>`;
+      return;
+    }
+    table.innerHTML = entries.map(e => {
+      const timeStr = new Date(e.timestamp).toLocaleTimeString();
+      const resultHtml = e.type === 'quiz'
+        ? `<span class="slog-result ${e.quizCorrect ? 'correct' : 'wrong'}">${e.quizCorrect ? '✓' : '✗'}</span>`
+        : '';
+      const detail = e.type === 'quiz'
+        ? ` <span style="color:var(--muted);font-size:9px;"> · ${escapeHtml(e.quizAnswerText)}</span>`
+        : '';
+      return `<div class="slog-row"><span class="slog-time">${timeStr}</span><span class="slog-type ${e.type}">${e.type}</span><span class="slog-node">${escapeHtml(e.nodeName)}${detail}</span>${resultHtml}</div>`;
+    }).join('');
+  },
+
+  filter(filter) {
+    ['all','visit','quiz'].forEach(t => {
+      const btn = document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1));
+      if (btn) btn.style.borderColor = t === filter ? 'var(--accent)' : '';
+    });
+    FV.session.buildTable(filter);
+  },
+
+  clear() {
+    if (!confirm('Clear the current session log?')) return;
+    FV.session.reset();
+    closeModal('modalSessionLog');
+  },
+
+  exportCSV() {
+    if (!FV.session.log.length) { alert('No session data to export.'); return; }
+    const headers = ['Timestamp','Route','Node ID','Node Name','Event Type','Quiz Correct','Answer Given','Correct Answer','Question'];
+    const rows = FV.session.log.map(e => [
+      e.timestamp, e.routeName, e.nodeId, e.nodeName, e.type,
+      e.type === 'quiz' ? (e.quizCorrect ? 'TRUE' : 'FALSE') : '',
+      e.type === 'quiz' ? (e.quizAnswerText  || '') : '',
+      e.type === 'quiz' ? (e.quizCorrectText || '') : '',
+      e.type === 'quiz' ? (e.quizQuestion    || '') : ''
+    ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
+    const csv  = [headers.join(','), ...rows].join('\r\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url  = URL.createObjectURL(blob);
+    const a    = document.createElement('a');
+    a.href = url; a.download = `session-log-${new Date().toISOString().slice(0,10)}.csv`;
+    a.click(); URL.revokeObjectURL(url);
   }
-  const visits  = sessionLog.filter(e => e.type === 'visit');
-  const quizzes = sessionLog.filter(e => e.type === 'quiz');
-  const correct = quizzes.filter(e => e.quizCorrect).length;
-  const startFmt = sessionStartTime ? new Date(sessionStartTime).toLocaleTimeString() : '—';
-  meta.textContent = `Started: ${startFmt}  ·  ${visits.length} visits  ·  ${correct}/${quizzes.length} quiz correct`;
-  const entries = filter === 'visit' ? visits : filter === 'quiz' ? quizzes : sessionLog;
-  if (!entries.length) {
-    table.innerHTML = `<div style="padding:16px;color:var(--muted);text-align:center;">No ${filter} events.</div>`;
-    return;
-  }
-  table.innerHTML = entries.map(e => {
-    const timeStr = new Date(e.timestamp).toLocaleTimeString();
-    const resultHtml = e.type === 'quiz'
-      ? `<span class="slog-result ${e.quizCorrect ? 'correct' : 'wrong'}">${e.quizCorrect ? '✓' : '✗'}</span>`
-      : '';
-    const detail = e.type === 'quiz'
-      ? ` <span style="color:var(--muted);font-size:9px;"> · ${escapeHtml(e.quizAnswerText)}</span>`
-      : '';
-    return `<div class="slog-row"><span class="slog-time">${timeStr}</span><span class="slog-type ${e.type}">${e.type}</span><span class="slog-node">${escapeHtml(e.nodeName)}${detail}</span>${resultHtml}</div>`;
-  }).join('');
-}
-
-function filterSessionLog(filter) {
-  ['all','visit','quiz'].forEach(t => {
-    const btn = document.getElementById('tab' + t.charAt(0).toUpperCase() + t.slice(1));
-    if (btn) btn.style.borderColor = t === filter ? 'var(--accent)' : '';
-  });
-  buildSessionLogTable(filter);
-}
-
-function clearSessionLog() {
-  if (!confirm('Clear the current session log?')) return;
-  sessionLog = []; sessionStartTime = null;
-  document.getElementById('btnSessionLog').style.display = 'none';
-  closeModal('modalSessionLog');
-}
-
-function exportSessionLogCSV() {
-  if (!sessionLog.length) { alert('No session data to export.'); return; }
-  const headers = ['Timestamp','Route','Node ID','Node Name','Event Type','Quiz Correct','Answer Given','Correct Answer','Question'];
-  const rows = sessionLog.map(e => [
-    e.timestamp, e.routeName, e.nodeId, e.nodeName, e.type,
-    e.type === 'quiz' ? (e.quizCorrect ? 'TRUE' : 'FALSE') : '',
-    e.type === 'quiz' ? (e.quizAnswerText  || '') : '',
-    e.type === 'quiz' ? (e.quizCorrectText || '') : '',
-    e.type === 'quiz' ? (e.quizQuestion    || '') : ''
-  ].map(v => `"${String(v).replace(/"/g, '""')}"`).join(','));
-  const csv  = [headers.join(','), ...rows].join('\r\n');
-  const blob = new Blob([csv], { type: 'text/csv' });
-  const url  = URL.createObjectURL(blob);
-  const a    = document.createElement('a');
-  a.href = url; a.download = `session-log-${new Date().toISOString().slice(0,10)}.csv`;
-  a.click(); URL.revokeObjectURL(url);
-}
+};
+// Backward-compat shims — remove when all callers migrate to FV.session.*
+function openSessionLog() { FV.session.open(); }
+function filterSessionLog(f) { FV.session.filter(f); }
+function clearSessionLog() { FV.session.clear(); }
+function exportSessionLogCSV() { FV.session.exportCSV(); }
 
 // Close settings panel when clicking outside
 document.addEventListener('mousedown', e => {
