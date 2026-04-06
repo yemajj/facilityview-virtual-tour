@@ -3380,10 +3380,15 @@ function toggleFullscreen() {
 }
 
 // ══════════════════════════════════════════════════
-// MODAL HELPERS
+// MODALS MODULE (FV.modals)
 // ══════════════════════════════════════════════════
-function openModal(id)  { document.getElementById(id).classList.add('open'); }
-function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+FV.modals = {
+  open(id)  { document.getElementById(id).classList.add('open'); },
+  close(id) { document.getElementById(id).classList.remove('open'); }
+};
+// Backward-compat shims — called from ~30 HTML onclick + JS callsites
+function openModal(id)  { FV.modals.open(id); }
+function closeModal(id) { FV.modals.close(id); }
 document.querySelectorAll('.modal-bg').forEach(bg => {
   bg.addEventListener('click', e => { if (e.target===bg) bg.classList.remove('open'); });
 });
