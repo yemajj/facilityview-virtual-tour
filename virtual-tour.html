@@ -592,7 +592,7 @@
     </button>
   </div>
   <div class="header-right">
-    <button class="btn-icon-text" id="btnQuizResults" onclick="showQuizScore()" style="display:none" title="View quiz results for this session">
+    <button class="btn-icon-text" id="btnQuizResults" onclick="FV.quiz.showScore()" style="display:none" title="View quiz results for this session">
       <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
       Results
     </button>
@@ -604,7 +604,7 @@
       <svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8l-6-6zm-1 2l5 5h-5V4zM8 12h8v2H8v-2zm0 4h5v2H8v-2zm0-8h3v2H8V8z"/></svg>
       Docs
     </button>
-    <button class="btn-icon-text" id="btnKiosk" onclick="enterKioskMode()" title="Kiosk / presentation mode — hides editing UI">
+    <button class="btn-icon-text" id="btnKiosk" onclick="FV.kiosk.enter()" title="Kiosk / presentation mode — hides editing UI">
       <svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>
       Kiosk
     </button>
@@ -791,14 +791,14 @@
     <div id="kioskControls">
       <div id="kioskProgressBar"></div>
       <div id="kioskBar">
-        <label><input type="checkbox" id="kioskAutoToggle" onchange="setKioskAuto(this.checked)"> Auto-advance</label>
+        <label><input type="checkbox" id="kioskAutoToggle" onchange="FV.kiosk.setAuto(this.checked)"> Auto-advance</label>
         <div id="kioskIntervalWrap">
           <span>Every</span>
-          <input type="range" id="kioskIntervalSlider" min="3" max="60" value="10" style="width:80px;" oninput="setKioskInterval(+this.value)">
+          <input type="range" id="kioskIntervalSlider" min="3" max="60" value="10" style="width:80px;" oninput="FV.kiosk.setInterval(+this.value)">
           <span id="kioskIntervalVal">10s</span>
         </div>
         <div class="kiosk-sep"></div>
-        <button id="btnExitKiosk" onclick="exitKioskMode()">✕ Exit Kiosk</button>
+        <button id="btnExitKiosk" onclick="FV.kiosk.exit()">✕ Exit Kiosk</button>
       </div>
     </div>
     <div id="hotspotLightbox" onclick="closeLightbox()">
@@ -974,7 +974,7 @@
     <div class="modal-field">
       <label style="display:flex;align-items:center;justify-content:space-between;">
         <span>Quiz Question</span>
-        <span id="quizToggleLabel" onclick="toggleQuizEditor()" style="cursor:pointer;font-family:var(--mono);font-size:9px;letter-spacing:0.5px;color:var(--accent2);">+ Add Question</span>
+        <span id="quizToggleLabel" onclick="FV.quiz.toggleEditor()" style="cursor:pointer;font-family:var(--mono);font-size:9px;letter-spacing:0.5px;color:var(--accent2);">+ Add Question</span>
       </label>
       <div id="quizEditorContent" style="display:none;margin-top:8px;flex-direction:column;gap:8px;">
         <textarea id="quizQText" placeholder="Question text..." maxlength="300" style="width:100%;box-sizing:border-box;min-height:56px;resize:vertical;background:var(--bg);border:1px solid var(--border);color:var(--text);font-family:var(--sans);font-size:13px;padding:8px 10px;border-radius:3px;outline:none;transition:border-color 0.15s;"></textarea>
@@ -1141,7 +1141,7 @@
     </div>
     <div class="modal-actions">
       <button class="modal-btn-cancel" onclick="closeModal('modalQuizScore')">Close</button>
-      <button class="modal-btn-ok" onclick="resetQuizSession();closeModal('modalQuizScore')">Retake</button>
+      <button class="modal-btn-ok" onclick="FV.quiz.resetSession();closeModal('modalQuizScore')">Retake</button>
     </div>
   </div>
 </div>
@@ -1236,6 +1236,11 @@
 
 <script>
 // ══════════════════════════════════════════════════
+// MODULE NAMESPACE
+// ══════════════════════════════════════════════════
+const FV = {};
+
+// ══════════════════════════════════════════════════
 // STATE
 // ══════════════════════════════════════════════════
 const routes = [];
@@ -1270,15 +1275,11 @@ let editingHotspotId = null;       // null = new, string = editing existing
 let repositioningHotspotId = null; // null = normal, string = reposition in progress
 let pendingHotspotFileData = null; // { dataUrl, filename } for image/file hotspots
 
-// Kiosk mode
-let kioskActive     = false;
-let kioskAuto       = false;
-let kioskIntervalSec = 10;
-let kioskTimerId    = null;
+// Kiosk mode — now managed by FV.kiosk module (see below)
 
-// Quiz session state
-let quizAnswered = {};         // nodeId → { selectedIdx, correct, correctIdx }
-let quizResultsShown = false;  // prevent auto-showing score modal more than once per session
+// Quiz session state — now managed by FV.quiz module (see below)
+// Backward-compat shim: quizAnswered is an object reference so aliasing works
+// quizResultsShown uses getter/setter to stay in sync with FV.quiz.resultsShown
 
 // Training session log
 let sessionLog = [];           // { type, nodeId, nodeName, routeId, routeName, timestamp, ...quizFields }
@@ -1455,7 +1456,7 @@ window.addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
   if ((e.key === 's' || e.key === 'S') && !mapEditorOpen) toggleSidebar();
   if (e.key === '?' || e.key === '/') { e.preventDefault(); openModal('helpOverlay'); }
-  if (e.key === 'Escape' && !kioskActive) {
+  if (e.key === 'Escape' && !FV.kiosk.active) {
     document.querySelectorAll('.modal-bg.open').forEach(m => m.classList.remove('open'));
     if (settingsOpen) toggleSettings();
   }
@@ -1553,10 +1554,9 @@ document.getElementById('routeSelect').addEventListener('change', function() {
 function selectRoute(idx) {
   currentRouteIdx = idx; currentNodeIdx = -1; img = null;
   // Reset quiz session for new route
-  quizAnswered = {}; quizResultsShown = false;
+  FV.quiz.resetSession();
   if (window._quizKeyHandler) { document.removeEventListener('keydown', window._quizKeyHandler); window._quizKeyHandler = null; }
   document.getElementById('quizOverlay').style.display = 'none';
-  document.getElementById('btnQuizResults').style.display = 'none';
   sessionLog = []; sessionStartTime = null;
   document.getElementById('btnSessionLog').style.display = 'none';
   // Reset map editor state if switching route while editor closed
@@ -2047,7 +2047,7 @@ function navigateTo(index) {
   }
 
   // Reset kiosk auto-advance timer on any navigation
-  if (kioskActive && kioskAuto) { stopKioskTimer(); startKioskTimer(); }
+  if (FV.kiosk.active && FV.kiosk.auto) { FV.kiosk.stopTimer(); FV.kiosk.startTimer(); }
 
   // Free 2D pixel cache from the previous node to avoid memory bloat
   if (img && img._pixelCache) { img._pixelCache = null; }
@@ -2075,11 +2075,11 @@ function navigateTo(index) {
     fadeTimeout = setTimeout(() => {
       isFading = false; fadeTimeout = null;
       hotspotsEl.style.opacity = '1';
-      checkNodeQuiz(index);
+      FV.quiz.checkNodeQuiz(index);
     }, 360);
   } else {
     hotspotsEl.style.opacity = '1';
-    checkNodeQuiz(index);
+    FV.quiz.checkNodeQuiz(index);
   }
 }
 function navigatePrev() { if (currentNodeIdx > 0) navigateTo(currentNodeIdx - 1); }
@@ -2254,7 +2254,7 @@ function buildHotspots(index) {
     let dragStartX = null, dragStartY = null, isDraggingArrow = false;
     let onDocMove, onDocUp;
     el.addEventListener('mousedown', e => {
-      if (kioskActive) return;
+      if (FV.kiosk.active) return;
       dragStartX = e.clientX; dragStartY = e.clientY; isDraggingArrow = false;
       onDocMove = ev => {
         if (dragStartX === null) return;
@@ -2294,7 +2294,7 @@ function buildHotspots(index) {
     el.addEventListener('click', e => { if (!isDraggingArrow) navigateTo(t.idx); });
     el.addEventListener('contextmenu', e => {
       e.preventDefault();
-      if (kioskActive) return;
+      if (FV.kiosk.active) return;
       if (t.hasOverride || (current.connectionOverrides && current.connectionOverrides[t.targetId])) {
         if (confirm(`Reset arrow position for "${t.label}" back to auto?`)) {
           const node = currentNodes()[currentNodeIdx];
@@ -2347,7 +2347,7 @@ function buildHotspots(index) {
         el.addEventListener('click', () => { if (hs.content && (isSafeUrl(hs.content) || hs.content.startsWith('data:'))) window.open(hs.content, '_blank'); });
       } else if (hs.type === 'quiz') {
         el.addEventListener('click', () => {
-          if (hs.quiz && !quizAnswered[hs.id]) showQuizQuestion({ id: hs.id, name: hs.label, quiz: hs.quiz });
+          if (hs.quiz && !FV.quiz.answered[hs.id]) FV.quiz.showQuestion({ id: hs.id, name: hs.label, quiz: hs.quiz });
         });
       }
       el.addEventListener('contextmenu', e => {
@@ -3874,57 +3874,76 @@ function startInertia() {
   inertiaId = requestAnimationFrame(tick);
 }
 // ══════════════════════════════════════════════════
-// KIOSK / PRESENTATION MODE
+// KIOSK MODULE (FV.kiosk)
 // ══════════════════════════════════════════════════
-function enterKioskMode() {
-  kioskActive = true;
-  document.body.classList.add('kiosk-mode');
-  // Sync controls to current state
-  document.getElementById('kioskAutoToggle').checked = kioskAuto;
-  document.getElementById('kioskIntervalSlider').value = kioskIntervalSec;
-  document.getElementById('kioskIntervalVal').textContent = kioskIntervalSec + 's';
-  if (kioskAuto) startKioskTimer();
-}
-function exitKioskMode() {
-  kioskActive = false;
-  document.body.classList.remove('kiosk-mode');
-  stopKioskTimer();
-}
-function setKioskAuto(enabled) {
-  kioskAuto = enabled;
-  if (enabled) startKioskTimer(); else stopKioskTimer();
-}
-function setKioskInterval(val) {
-  kioskIntervalSec = val;
-  document.getElementById('kioskIntervalVal').textContent = val + 's';
-  if (kioskAuto) { stopKioskTimer(); startKioskTimer(); }
-}
-function startKioskTimer() {
-  stopKioskTimer();
-  const bar = document.getElementById('kioskProgressBar');
-  if (bar) {
-    bar.style.transition = 'none';
-    bar.style.width = '0%';
-    bar.offsetWidth; // force reflow so the reset takes effect before the transition starts
-    bar.style.transition = `width ${kioskIntervalSec}s linear`;
-    bar.style.width = '100%';
+FV.kiosk = {
+  active: false,
+  auto: false,
+  intervalSec: 10,
+  timerId: null,
+
+  enter() {
+    FV.kiosk.active = true;
+    document.body.classList.add('kiosk-mode');
+    // Sync controls to current state
+    document.getElementById('kioskAutoToggle').checked = FV.kiosk.auto;
+    document.getElementById('kioskIntervalSlider').value = FV.kiosk.intervalSec;
+    document.getElementById('kioskIntervalVal').textContent = FV.kiosk.intervalSec + 's';
+    if (FV.kiosk.auto) FV.kiosk.startTimer();
+  },
+
+  exit() {
+    FV.kiosk.active = false;
+    document.body.classList.remove('kiosk-mode');
+    FV.kiosk.stopTimer();
+  },
+
+  setAuto(enabled) {
+    FV.kiosk.auto = enabled;
+    if (enabled) FV.kiosk.startTimer(); else FV.kiosk.stopTimer();
+  },
+
+  setInterval(val) {
+    FV.kiosk.intervalSec = val;
+    document.getElementById('kioskIntervalVal').textContent = val + 's';
+    if (FV.kiosk.auto) { FV.kiosk.stopTimer(); FV.kiosk.startTimer(); }
+  },
+
+  startTimer() {
+    FV.kiosk.stopTimer();
+    const bar = document.getElementById('kioskProgressBar');
+    if (bar) {
+      bar.style.transition = 'none';
+      bar.style.width = '0%';
+      bar.offsetWidth; // force reflow so the reset takes effect before the transition starts
+      bar.style.transition = `width ${FV.kiosk.intervalSec}s linear`;
+      bar.style.width = '100%';
+    }
+    FV.kiosk.timerId = setTimeout(() => {
+      const nodes = currentNodes();
+      if (nodes.length === 0) return;
+      // Advance to next node; loop back to first after last
+      const next = currentNodeIdx < nodes.length - 1 ? currentNodeIdx + 1 : 0;
+      navigateTo(next);
+    }, FV.kiosk.intervalSec * 1000);
+  },
+
+  stopTimer() {
+    if (FV.kiosk.timerId) { clearTimeout(FV.kiosk.timerId); FV.kiosk.timerId = null; }
+    const bar = document.getElementById('kioskProgressBar');
+    if (bar) { bar.style.transition = 'none'; bar.style.width = '0%'; }
   }
-  kioskTimerId = setTimeout(() => {
-    const nodes = currentNodes();
-    if (nodes.length === 0) return;
-    // Advance to next node; loop back to first after last
-    const next = currentNodeIdx < nodes.length - 1 ? currentNodeIdx + 1 : 0;
-    navigateTo(next);
-  }, kioskIntervalSec * 1000);
-}
-function stopKioskTimer() {
-  if (kioskTimerId) { clearTimeout(kioskTimerId); kioskTimerId = null; }
-  const bar = document.getElementById('kioskProgressBar');
-  if (bar) { bar.style.transition = 'none'; bar.style.width = '0%'; }
-}
+};
+// Backward-compat shims — remove when all callers migrate to FV.kiosk.*
+function enterKioskMode() { FV.kiosk.enter(); }
+function exitKioskMode() { FV.kiosk.exit(); }
+function setKioskAuto(enabled) { FV.kiosk.setAuto(enabled); }
+function setKioskInterval(val) { FV.kiosk.setInterval(val); }
+function startKioskTimer() { FV.kiosk.startTimer(); }
+function stopKioskTimer() { FV.kiosk.stopTimer(); }
 // Escape key exits kiosk mode
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape' && kioskActive) exitKioskMode();
+  if (e.key === 'Escape' && FV.kiosk.active) FV.kiosk.exit();
 });
 
 // ══════════════════════════════════════════════════
@@ -4188,175 +4207,189 @@ document.addEventListener('keydown', e => {
 // ══════════════════════════════════════════════════
 // QUIZ / ASSESSMENT MODE
 // ══════════════════════════════════════════════════
-function checkNodeQuiz(index) {
-  const nodes = currentNodes();
-  const node  = nodes[index];
-  const isLast = index === nodes.length - 1;
+// ══════════════════════════════════════════════════
+// QUIZ MODULE (FV.quiz)
+// ══════════════════════════════════════════════════
+FV.quiz = {
+  answered: {},          // nodeId → { selectedIdx, correct, correctIdx }
+  resultsShown: false,   // prevent auto-showing score modal more than once per session
 
-  if (!node || !node.quiz) {
-    // No quiz on this node — if at last node with unshown results, show score
-    if (isLast && Object.keys(quizAnswered).length > 0 && !quizResultsShown) {
-      quizResultsShown = true;
-      setTimeout(() => showQuizScore(), 600);
+  checkNodeQuiz(index) {
+    const nodes = currentNodes();
+    const node  = nodes[index];
+    const isLast = index === nodes.length - 1;
+
+    if (!node || !node.quiz) {
+      if (isLast && Object.keys(FV.quiz.answered).length > 0 && !FV.quiz.resultsShown) {
+        FV.quiz.resultsShown = true;
+        setTimeout(() => FV.quiz.showScore(), 600);
+      }
+      return;
     }
-    return;
-  }
-  // Quiz already answered this session — skip re-showing
-  if (quizAnswered[node.id]) {
-    if (isLast && !quizResultsShown) {
-      quizResultsShown = true;
-      setTimeout(() => showQuizScore(), 600);
+    if (FV.quiz.answered[node.id]) {
+      if (isLast && !FV.quiz.resultsShown) {
+        FV.quiz.resultsShown = true;
+        setTimeout(() => FV.quiz.showScore(), 600);
+      }
+      return;
     }
-    return;
-  }
-  showQuizQuestion(node);
-}
+    FV.quiz.showQuestion(node);
+  },
 
-function showQuizQuestion(node) {
-  const q = node.quiz;
-  document.getElementById('quizNodeLabel').textContent = node.name;
-  document.getElementById('quizQuestion').textContent  = q.question;
-  const optsEl = document.getElementById('quizOptions');
-  optsEl.innerHTML = '';
-  const letters = ['A','B','C','D'];
-  q.options.forEach((opt, i) => {
-    const btn = document.createElement('button');
-    btn.className = 'quiz-opt-btn';
-    btn.innerHTML = `<span class="quiz-opt-letter">${letters[i]}</span><span class="quiz-opt-text">${escapeHtml(opt)}</span>`;
-    btn.addEventListener('click', () => submitQuizAnswer(node, i));
-    optsEl.appendChild(btn);
-  });
-  const fb = document.getElementById('quizFeedback');
-  fb.style.display = 'none';
-  fb.className = '';
-  document.getElementById('quizContinueBtn').style.display = 'none';
-  document.getElementById('quizOverlay').style.display = 'flex';
-  // Keyboard A/B/C/D shortcut handler
-  if (window._quizKeyHandler) document.removeEventListener('keydown', window._quizKeyHandler);
-  window._quizKeyHandler = e => {
-    if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
-    const idx = ['a','b','c','d'].indexOf(e.key.toLowerCase());
-    if (idx >= 0 && idx < q.options.length && !quizAnswered[node.id]) {
-      submitQuizAnswer(node, idx);
-    }
-  };
-  document.addEventListener('keydown', window._quizKeyHandler);
-}
-
-function submitQuizAnswer(node, selectedIdx) {
-  const q = node.quiz;
-  if (!q || selectedIdx < 0 || selectedIdx >= q.options.length) return;
-  const correct = selectedIdx === q.correctIndex;
-  quizAnswered[node.id] = { selectedIdx, correct, correctIdx: q.correctIndex };
-  // Training session log: record quiz answer
-  sessionLog.push({ type: 'quiz', nodeId: node.id, nodeName: node.name, routeId: currentRoute()?.id || '', routeName: currentRoute()?.name || '', timestamp: new Date().toISOString(), quizCorrect: correct, quizSelectedIdx: selectedIdx, quizCorrectIdx: q.correctIndex, quizQuestion: q.question, quizAnswerText: q.options[selectedIdx], quizCorrectText: q.options[q.correctIndex] });
-
-  // Disable all buttons and highlight correct / wrong
-  const btns = document.querySelectorAll('.quiz-opt-btn');
-  btns.forEach((btn, i) => {
-    btn.disabled = true;
-    if (i === q.correctIndex) btn.classList.add('quiz-opt-correct');
-    else if (i === selectedIdx && !correct) btn.classList.add('quiz-opt-wrong');
-  });
-
-  // Show feedback
-  const letters = ['A','B','C','D'];
-  const fb = document.getElementById('quizFeedback');
-  fb.style.display = '';
-  fb.className = correct ? 'quiz-feedback-correct' : 'quiz-feedback-wrong';
-  fb.innerHTML = correct
-    ? `<span class="quiz-fb-icon">✓</span> <strong>Correct!</strong>${q.explanation ? ' ' + escapeHtml(q.explanation) : ''}`
-    : `<span class="quiz-fb-icon">✗</span> <strong>Incorrect.</strong> The correct answer was <strong>${escapeHtml(letters[q.correctIndex] + ': ' + q.options[q.correctIndex])}</strong>.${q.explanation ? ' ' + escapeHtml(q.explanation) : ''}`;
-
-  document.getElementById('quizContinueBtn').style.display = '';
-
-  // Show Results button in header
-  document.getElementById('btnQuizResults').style.display = '';
-}
-
-function closeQuizOverlay() {
-  if (window._quizKeyHandler) { document.removeEventListener('keydown', window._quizKeyHandler); window._quizKeyHandler = null; }
-  document.getElementById('quizOverlay').style.display = 'none';
-  // Show score if at last node and results not yet shown
-  const nodes = currentNodes();
-  if (currentNodeIdx === nodes.length - 1 && !quizResultsShown) {
-    quizResultsShown = true;
-    setTimeout(() => showQuizScore(), 400);
-  }
-}
-
-function showQuizScore() {
-  const nodes = currentNodes();
-  const route = currentRoute();
-  // Collect all quiz sources: node quizzes + hotspot quizzes
-  const allQuizItems = [];
-  nodes.forEach(n => {
-    if (n.quiz) allQuizItems.push({ id: n.id, name: n.name, quiz: n.quiz });
-    (n.hotspots || []).forEach(hs => {
-      if (hs.type === 'quiz' && hs.quiz) allQuizItems.push({ id: hs.id, name: hs.label, quiz: hs.quiz });
+  showQuestion(node) {
+    const q = node.quiz;
+    document.getElementById('quizNodeLabel').textContent = node.name;
+    document.getElementById('quizQuestion').textContent  = q.question;
+    const optsEl = document.getElementById('quizOptions');
+    optsEl.innerHTML = '';
+    const letters = ['A','B','C','D'];
+    q.options.forEach((opt, i) => {
+      const btn = document.createElement('button');
+      btn.className = 'quiz-opt-btn';
+      btn.innerHTML = `<span class="quiz-opt-letter">${letters[i]}</span><span class="quiz-opt-text">${escapeHtml(opt)}</span>`;
+      btn.addEventListener('click', () => FV.quiz.submitAnswer(node, i));
+      optsEl.appendChild(btn);
     });
-  });
-  const answered  = Object.keys(quizAnswered).length;
-  if (!answered && !allQuizItems.length) return;
+    const fb = document.getElementById('quizFeedback');
+    fb.style.display = 'none';
+    fb.className = '';
+    document.getElementById('quizContinueBtn').style.display = 'none';
+    document.getElementById('quizOverlay').style.display = 'flex';
+    // Keyboard A/B/C/D shortcut handler
+    if (window._quizKeyHandler) document.removeEventListener('keydown', window._quizKeyHandler);
+    window._quizKeyHandler = e => {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      const idx = ['a','b','c','d'].indexOf(e.key.toLowerCase());
+      if (idx >= 0 && idx < q.options.length && !FV.quiz.answered[node.id]) {
+        FV.quiz.submitAnswer(node, idx);
+      }
+    };
+    document.addEventListener('keydown', window._quizKeyHandler);
+  },
 
-  const allQuizIds = new Set(allQuizItems.map(q => q.id));
-  const correct = Object.entries(quizAnswered)
-    .filter(([id, a]) => allQuizIds.has(id) && a.correct).length;
-  const total   = allQuizItems.length;
-  const pct     = total > 0 ? Math.round((correct / total) * 100) : 0;
-  const letters = ['A','B','C','D'];
+  submitAnswer(node, selectedIdx) {
+    const q = node.quiz;
+    if (!q || selectedIdx < 0 || selectedIdx >= q.options.length) return;
+    const correct = selectedIdx === q.correctIndex;
+    FV.quiz.answered[node.id] = { selectedIdx, correct, correctIdx: q.correctIndex };
+    // Training session log: record quiz answer
+    sessionLog.push({ type: 'quiz', nodeId: node.id, nodeName: node.name, routeId: currentRoute()?.id || '', routeName: currentRoute()?.name || '', timestamp: new Date().toISOString(), quizCorrect: correct, quizSelectedIdx: selectedIdx, quizCorrectIdx: q.correctIndex, quizQuestion: q.question, quizAnswerText: q.options[selectedIdx], quizCorrectText: q.options[q.correctIndex] });
 
-  let rows = '';
-  allQuizItems.forEach(q => {
-    const ans = quizAnswered[q.id];
-    const isHotspot = q.id.startsWith('HS');
-    const displayId = isHotspot ? '?' : escapeHtml(q.id);
-    if (!ans) {
-      rows += `<div class="quiz-score-row unanswered"><span class="quiz-score-node">${displayId}</span><span class="quiz-score-name">${escapeHtml(q.name)}</span><span class="quiz-score-result">—</span></div>`;
-    } else {
-      rows += `<div class="quiz-score-row ${ans.correct ? 'correct' : 'wrong'}">
-        <span class="quiz-score-node">${displayId}</span>
-        <span class="quiz-score-name">${escapeHtml(q.name)}</span>
-        <span class="quiz-score-result">${ans.correct ? '✓' : '✗'} ${letters[ans.selectedIdx]}</span>
-      </div>
-      <div class="quiz-score-question">${escapeHtml(q.quiz.question)}</div>`;
+    // Disable all buttons and highlight correct / wrong
+    const btns = document.querySelectorAll('.quiz-opt-btn');
+    btns.forEach((btn, i) => {
+      btn.disabled = true;
+      if (i === q.correctIndex) btn.classList.add('quiz-opt-correct');
+      else if (i === selectedIdx && !correct) btn.classList.add('quiz-opt-wrong');
+    });
+
+    // Show feedback
+    const letters = ['A','B','C','D'];
+    const fb = document.getElementById('quizFeedback');
+    fb.style.display = '';
+    fb.className = correct ? 'quiz-feedback-correct' : 'quiz-feedback-wrong';
+    fb.innerHTML = correct
+      ? `<span class="quiz-fb-icon">✓</span> <strong>Correct!</strong>${q.explanation ? ' ' + escapeHtml(q.explanation) : ''}`
+      : `<span class="quiz-fb-icon">✗</span> <strong>Incorrect.</strong> The correct answer was <strong>${escapeHtml(letters[q.correctIndex] + ': ' + q.options[q.correctIndex])}</strong>.${q.explanation ? ' ' + escapeHtml(q.explanation) : ''}`;
+
+    document.getElementById('quizContinueBtn').style.display = '';
+
+    // Show Results button in header
+    document.getElementById('btnQuizResults').style.display = '';
+  },
+
+  closeOverlay() {
+    if (window._quizKeyHandler) { document.removeEventListener('keydown', window._quizKeyHandler); window._quizKeyHandler = null; }
+    document.getElementById('quizOverlay').style.display = 'none';
+    // Show score if at last node and results not yet shown
+    const nodes = currentNodes();
+    if (currentNodeIdx === nodes.length - 1 && !FV.quiz.resultsShown) {
+      FV.quiz.resultsShown = true;
+      setTimeout(() => FV.quiz.showScore(), 400);
     }
-  });
+  },
 
-  const circle = document.getElementById('quizScoreCircle');
-  circle.textContent = pct + '%';
-  circle.className   = 'quiz-score-circle ' + (pct >= 80 ? 'pass' : 'fail');
-  document.getElementById('quizScoreSummary').textContent = `${correct} / ${total} correct${answered < total ? ` (${total - answered} unanswered)` : ''}`;
-  document.getElementById('quizScoreRoute').textContent  = route ? route.name : '';
-  document.getElementById('quizScoreRows').innerHTML = rows;
-  openModal('modalQuizScore');
-}
-
-function resetQuizSession() {
-  quizAnswered = {};
-  quizResultsShown = false;
-  document.getElementById('btnQuizResults').style.display = 'none';
-}
-
-function toggleQuizEditor() {
-  const content = document.getElementById('quizEditorContent');
-  const toggle  = document.getElementById('quizToggleLabel');
-  const visible = content.style.display !== 'none';
-  content.style.display = visible ? 'none' : 'flex';
-  toggle.textContent = visible ? '+ Add Question' : '− Remove';
-  if (!visible) {
-    // Pre-populate from node if it already has a quiz
-    const node = currentNodes()[renameTargetIdx];
-    if (node && node.quiz) {
-      document.getElementById('quizQText').value = node.quiz.question || '';
-      ['quizOpt0','quizOpt1','quizOpt2','quizOpt3'].forEach((id, i) => {
-        document.getElementById(id).value = node.quiz.options[i] || '';
+  showScore() {
+    const nodes = currentNodes();
+    const route = currentRoute();
+    // Collect all quiz sources: node quizzes + hotspot quizzes
+    const allQuizItems = [];
+    nodes.forEach(n => {
+      if (n.quiz) allQuizItems.push({ id: n.id, name: n.name, quiz: n.quiz });
+      (n.hotspots || []).forEach(hs => {
+        if (hs.type === 'quiz' && hs.quiz) allQuizItems.push({ id: hs.id, name: hs.label, quiz: hs.quiz });
       });
-      document.getElementById('quizCorrectSelect').value = node.quiz.correctIndex ?? 0;
-      document.getElementById('quizExplText').value = node.quiz.explanation || '';
+    });
+    const answered  = Object.keys(FV.quiz.answered).length;
+    if (!answered && !allQuizItems.length) return;
+
+    const allQuizIds = new Set(allQuizItems.map(q => q.id));
+    const correct = Object.entries(FV.quiz.answered)
+      .filter(([id, a]) => allQuizIds.has(id) && a.correct).length;
+    const total   = allQuizItems.length;
+    const pct     = total > 0 ? Math.round((correct / total) * 100) : 0;
+    const letters = ['A','B','C','D'];
+
+    let rows = '';
+    allQuizItems.forEach(q => {
+      const ans = FV.quiz.answered[q.id];
+      const isHotspot = q.id.startsWith('HS');
+      const displayId = isHotspot ? '?' : escapeHtml(q.id);
+      if (!ans) {
+        rows += `<div class="quiz-score-row unanswered"><span class="quiz-score-node">${displayId}</span><span class="quiz-score-name">${escapeHtml(q.name)}</span><span class="quiz-score-result">—</span></div>`;
+      } else {
+        rows += `<div class="quiz-score-row ${ans.correct ? 'correct' : 'wrong'}">
+          <span class="quiz-score-node">${displayId}</span>
+          <span class="quiz-score-name">${escapeHtml(q.name)}</span>
+          <span class="quiz-score-result">${ans.correct ? '✓' : '✗'} ${letters[ans.selectedIdx]}</span>
+        </div>
+        <div class="quiz-score-question">${escapeHtml(q.quiz.question)}</div>`;
+      }
+    });
+
+    const circle = document.getElementById('quizScoreCircle');
+    circle.textContent = pct + '%';
+    circle.className   = 'quiz-score-circle ' + (pct >= 80 ? 'pass' : 'fail');
+    document.getElementById('quizScoreSummary').textContent = `${correct} / ${total} correct${answered < total ? ` (${total - answered} unanswered)` : ''}`;
+    document.getElementById('quizScoreRoute').textContent  = route ? route.name : '';
+    document.getElementById('quizScoreRows').innerHTML = rows;
+    openModal('modalQuizScore');
+  },
+
+  resetSession() {
+    FV.quiz.answered = {};
+    FV.quiz.resultsShown = false;
+    document.getElementById('btnQuizResults').style.display = 'none';
+  },
+
+  toggleEditor() {
+    const content = document.getElementById('quizEditorContent');
+    const toggle  = document.getElementById('quizToggleLabel');
+    const visible = content.style.display !== 'none';
+    content.style.display = visible ? 'none' : 'flex';
+    toggle.textContent = visible ? '+ Add Question' : '− Remove';
+    if (!visible) {
+      // Pre-populate from node if it already has a quiz
+      const node = currentNodes()[renameTargetIdx];
+      if (node && node.quiz) {
+        document.getElementById('quizQText').value = node.quiz.question || '';
+        ['quizOpt0','quizOpt1','quizOpt2','quizOpt3'].forEach((id, i) => {
+          document.getElementById(id).value = node.quiz.options[i] || '';
+        });
+        document.getElementById('quizCorrectSelect').value = node.quiz.correctIndex ?? 0;
+        document.getElementById('quizExplText').value = node.quiz.explanation || '';
+      }
     }
   }
-}
+};
+// Backward-compat shims — remove when all callers migrate to FV.quiz.*
+function checkNodeQuiz(index) { FV.quiz.checkNodeQuiz(index); }
+function showQuizQuestion(node) { FV.quiz.showQuestion(node); }
+function submitQuizAnswer(node, idx) { FV.quiz.submitAnswer(node, idx); }
+function closeQuizOverlay() { FV.quiz.closeOverlay(); }
+function showQuizScore() { FV.quiz.showScore(); }
+function resetQuizSession() { FV.quiz.resetSession(); }
+function toggleQuizEditor() { FV.quiz.toggleEditor(); }
 
 // ══════════════════════════════════════════════════
 // TRAINING SESSION LOG
