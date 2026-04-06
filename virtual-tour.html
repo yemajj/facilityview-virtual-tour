@@ -608,11 +608,11 @@
       <svg viewBox="0 0 24 24"><path d="M21 3H3c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h5v2h8v-2h5c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zm0 14H3V5h18v12z"/></svg>
       Kiosk
     </button>
-    <button class="btn-icon-text" id="btnExportViewer" onclick="exportViewerPackage()" title="Export a self-contained viewer file for trainees">
+    <button class="btn-icon-text" id="btnExportViewer" onclick="FV.persistence.exportViewerPackage()" title="Export a self-contained viewer file for trainees">
       <svg viewBox="0 0 24 24"><path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/></svg>
       Viewer
     </button>
-    <button class="btn-icon-text" id="btnExport" onclick="exportRoutes()" title="Export all routes to JSON">
+    <button class="btn-icon-text" id="btnExport" onclick="FV.persistence.exportRoutes()" title="Export all routes to JSON">
       <svg viewBox="0 0 24 24"><path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/></svg>
       Export
     </button>
@@ -1299,9 +1299,7 @@ let lastCompassDeg = 0;
 let VIEWER_MODE = false;
 const BAKED_ROUTES = null;
 
-// IndexedDB
-let db = null;
-let _saveTimeout = null;
+// IndexedDB — now managed by FV.persistence module (see below)
 
 const canvas       = document.getElementById('panoramaCanvas');
 let   ctx          = null;   // 2D context — only used when WebGL unavailable
@@ -3467,166 +3465,32 @@ function loadDemo() {
 }
 
 // ══════════════════════════════════════════════════
-// INDEXEDDB — SAVE / LOAD
+// PERSISTENCE MODULE (FV.persistence)
 // ══════════════════════════════════════════════════
-function openDB() {
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open('facilityview_db', 1);
-    req.onupgradeneeded = e => e.target.result.createObjectStore('tours', { keyPath: 'key' });
-    req.onsuccess = e => { db = e.target.result; resolve(); };
-    req.onerror = e => reject(e.target.error);
-  });
-}
-function saveRoutes() {
-  if (!db) return;
-  if (_saveTimeout) clearTimeout(_saveTimeout);
-  _saveTimeout = setTimeout(_saveRoutesNow, 300);
-}
-function _saveRoutesNow() {
-  if (!db) return;
-  _saveTimeout = null;
-  const data = routes.map(r => ({
-    id: r.id, name: r.name, desc: r.desc,
-    documents: (r.documents || []).map(d => ({ ...d })),
-    floors: (r.floors || []).map(f => ({ id: f.id, name: f.name, imageSrc: f.image ? f.image.src : null })),
-    nodes: r.nodes.map(n => ({
-      id: n.id, name: n.name, desc: n.desc,
-      imageSrc: n.image ? n.image.src : null,
-      mapX: n.mapX, mapY: n.mapY,
-      floorId: n.floorId || null,
-      connections: n.connections || [],
-      connectionOverrides: n.connectionOverrides || {},
-      hotspots: n.hotspots || [],
-      navArrowColor: n.navArrowColor || null,
-      quiz: n.quiz || null
-    }))
-  }));
-  const tx = db.transaction('tours', 'readwrite');
-  tx.objectStore('tours').put({ key: 'main', routes: data });
-  tx.oncomplete = () => flashSavedIndicator();
-}
-/**
- * Validate and repair raw route data from IndexedDB or baked exports.
- * Modifies rd in place. Returns { droppedConnections, droppedHotspots }
- * so callers can decide whether to alert the user.
- */
-function sanitizeRouteData(rd) {
-  const VALID_HOTSPOT_TYPES = ['info', 'link', 'url', 'image', 'file', 'quiz'];
-  let droppedConnections = 0, droppedHotspots = 0;
+FV.persistence = {
+  db: null,
+  _saveTimeout: null,
 
-  if (typeof rd.name !== 'string' || !rd.name.trim()) {
-    console.warn('sanitizeRouteData: route missing name, defaulting to Untitled');
-    rd.name = 'Untitled';
-  }
-  if (!Array.isArray(rd.nodes)) {
-    console.warn('sanitizeRouteData: nodes is not an array, resetting');
-    rd.nodes = [];
-  }
-  if (!Array.isArray(rd.floors) || rd.floors.length === 0) {
-    console.warn('sanitizeRouteData: floors missing or empty, adding default');
-    rd.floors = [{ id: 'F0', name: 'Floor 1', imageSrc: null }];
-  }
-  if (!Array.isArray(rd.documents)) {
-    console.warn('sanitizeRouteData: documents not an array, resetting');
-    rd.documents = [];
-  }
+  openDB() {
+    return new Promise((resolve, reject) => {
+      const req = indexedDB.open('facilityview_db', 1);
+      req.onupgradeneeded = e => e.target.result.createObjectStore('tours', { keyPath: 'key' });
+      req.onsuccess = e => { FV.persistence.db = e.target.result; resolve(); };
+      req.onerror = e => reject(e.target.error);
+    });
+  },
 
-  const validIds = new Set(rd.nodes.filter(n => typeof n.id === 'string').map(n => n.id));
-  rd.nodes.forEach(nd => {
-    if (typeof nd.id !== 'string') { console.warn('sanitizeRouteData: node missing id'); nd.id = ''; }
-    if (typeof nd.name !== 'string') { console.warn('sanitizeRouteData: node missing name'); nd.name = 'Unnamed'; }
-    if (!Array.isArray(nd.connections)) { console.warn('sanitizeRouteData: connections not array'); nd.connections = []; }
-    if (!Array.isArray(nd.hotspots)) { console.warn('sanitizeRouteData: hotspots not array'); nd.hotspots = []; }
+  save() {
+    if (!FV.persistence.db) return;
+    if (FV.persistence._saveTimeout) clearTimeout(FV.persistence._saveTimeout);
+    FV.persistence._saveTimeout = setTimeout(FV.persistence._saveNow, 300);
+  },
 
-    const before = nd.connections.length;
-    nd.connections = nd.connections.filter(id => validIds.has(id));
-    droppedConnections += before - nd.connections.length;
-
-    const hBefore = nd.hotspots.length;
-    nd.hotspots = nd.hotspots.filter(h => VALID_HOTSPOT_TYPES.includes(h.type));
-    // Remove link-type hotspots pointing at non-existent nodes
-    nd.hotspots = nd.hotspots.filter(h => h.type !== 'link' || validIds.has(h.content));
-    droppedHotspots += hBefore - nd.hotspots.length;
-  });
-
-  return { droppedConnections, droppedHotspots };
-}
-
-async function loadRoutes() {
-  if (!db) return false;
-  return new Promise(resolve => {
-    const tx = db.transaction('tours', 'readonly');
-    const req = tx.objectStore('tours').get('main');
-    req.onsuccess = async e => {
-      const record = e.target.result;
-      if (!record || !record.routes || !record.routes.length) { resolve(false); return; }
-      const promises = [];
-      let totalDropped = 0;
-      record.routes.forEach(rd => {
-        const { droppedConnections, droppedHotspots } = sanitizeRouteData(rd);
-        totalDropped += droppedConnections + droppedHotspots;
-        const route = { id: rd.id, name: rd.name, desc: rd.desc || '', documents: (rd.documents || []).map(d => ({...d})), nodes: [], floors: [] };
-        if (rd.floors && rd.floors.length) {
-          // New format: reconstruct floors array
-          rd.floors.forEach(f => {
-            const fl = { id: f.id, name: f.name, image: null };
-            if (f.imageSrc) {
-              fl.image = new Image();
-              promises.push(new Promise(res => { fl.image.onload = fl.image.onerror = res; }));
-              fl.image.src = f.imageSrc;
-            }
-            route.floors.push(fl);
-          });
-        } else if (rd.floorplan) {
-          // Old format: single floorplan → migrate to floors array
-          const fp = new Image();
-          promises.push(new Promise(res => { fp.onload = fp.onerror = res; }));
-          fp.src = rd.floorplan;
-          route.floors.push({ id: 'F0', name: 'Floor 1', image: fp });
-        } else {
-          route.floors.push({ id: 'F0', name: 'Floor 1', image: null });
-        }
-        rd.nodes.forEach(nd => {
-          let image = null;
-          if (nd.imageSrc) {
-            image = new Image();
-            promises.push(new Promise(res => { image.onload = image.onerror = res; }));
-            image.src = nd.imageSrc;
-          }
-          route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, floorId: nd.floorId || null, connections: nd.connections || [], connectionOverrides: nd.connectionOverrides || {}, hotspots: nd.hotspots || [], navArrowColor: nd.navArrowColor || null, quiz: nd.quiz || null });
-        });
-        // Migration: if every node has empty connections[], this is a pre-v2 save
-        // — auto-populate sequential bidirectional connections to preserve nav behavior
-        const allEmpty = route.nodes.every(n => !n.connections || n.connections.length === 0);
-        if (allEmpty && route.nodes.length > 1) {
-          for (let i = 0; i < route.nodes.length - 1; i++) {
-            route.nodes[i].connections.push(route.nodes[i+1].id);
-            route.nodes[i+1].connections.push(route.nodes[i].id);
-          }
-        }
-        routes.push(route);
-      });
-      await Promise.all(promises);
-      if (totalDropped > 0) alert('Some invalid data was repaired on load. Your tours have been cleaned up automatically.');
-      resolve(true);
-    };
-    req.onerror = () => resolve(false);
-  });
-}
-function flashSavedIndicator() {
-  const el = document.getElementById('savedIndicator');
-  el.classList.add('visible');
-  setTimeout(() => el.classList.remove('visible'), 1500);
-}
-
-// ══════════════════════════════════════════════════
-// VIEWER PACKAGE EXPORT
-// ══════════════════════════════════════════════════
-function serializeRoutesForExport() {
-  return {
-    version: 1,
-    exported: new Date().toISOString(),
-    routes: routes.map(r => ({
+  _saveNow() {
+    const P = FV.persistence;
+    if (!P.db) return;
+    P._saveTimeout = null;
+    const data = routes.map(r => ({
       id: r.id, name: r.name, desc: r.desc,
       documents: (r.documents || []).map(d => ({ ...d })),
       floors: (r.floors || []).map(f => ({ id: f.id, name: f.name, imageSrc: f.image ? f.image.src : null })),
@@ -3639,28 +3503,77 @@ function serializeRoutesForExport() {
         connectionOverrides: n.connectionOverrides || {},
         hotspots: n.hotspots || [],
         navArrowColor: n.navArrowColor || null,
-        quiz: n.quiz || null,
-        thumbUrl: null  // omit thumbnails — regenerated on demand
+        quiz: n.quiz || null
       }))
-    }))
-  };
-}
-async function loadFromBaked(data) {
-  const promises = [];
-  let totalDropped = 0;
-  (data.routes || []).forEach(rd => {
-    const { droppedConnections, droppedHotspots } = sanitizeRouteData(rd);
-    totalDropped += droppedConnections + droppedHotspots;
-    const route = { id: rd.id, name: rd.name, desc: rd.desc || '', documents: (rd.documents || []).map(d => ({ ...d })), nodes: [], floors: [] };
-    (rd.floors || [{ id: 'F0', name: 'Floor 1', imageSrc: null }]).forEach(f => {
-      const fl = { id: f.id, name: f.name, image: null };
-      if (f.imageSrc) {
-        fl.image = new Image();
-        promises.push(new Promise(res => { fl.image.onload = fl.image.onerror = res; }));
-        fl.image.src = f.imageSrc;
-      }
-      route.floors.push(fl);
+    }));
+    const tx = P.db.transaction('tours', 'readwrite');
+    tx.objectStore('tours').put({ key: 'main', routes: data });
+    tx.oncomplete = () => FV.persistence.flashSaved();
+  },
+
+  sanitize(rd) {
+    const VALID_HOTSPOT_TYPES = ['info', 'link', 'url', 'image', 'file', 'quiz'];
+    let droppedConnections = 0, droppedHotspots = 0;
+
+    if (typeof rd.name !== 'string' || !rd.name.trim()) {
+      console.warn('sanitizeRouteData: route missing name, defaulting to Untitled');
+      rd.name = 'Untitled';
+    }
+    if (!Array.isArray(rd.nodes)) {
+      console.warn('sanitizeRouteData: nodes is not an array, resetting');
+      rd.nodes = [];
+    }
+    if (!Array.isArray(rd.floors) || rd.floors.length === 0) {
+      console.warn('sanitizeRouteData: floors missing or empty, adding default');
+      rd.floors = [{ id: 'F0', name: 'Floor 1', imageSrc: null }];
+    }
+    if (!Array.isArray(rd.documents)) {
+      console.warn('sanitizeRouteData: documents not an array, resetting');
+      rd.documents = [];
+    }
+
+    const validIds = new Set(rd.nodes.filter(n => typeof n.id === 'string').map(n => n.id));
+    rd.nodes.forEach(nd => {
+      if (typeof nd.id !== 'string') { console.warn('sanitizeRouteData: node missing id'); nd.id = ''; }
+      if (typeof nd.name !== 'string') { console.warn('sanitizeRouteData: node missing name'); nd.name = 'Unnamed'; }
+      if (!Array.isArray(nd.connections)) { console.warn('sanitizeRouteData: connections not array'); nd.connections = []; }
+      if (!Array.isArray(nd.hotspots)) { console.warn('sanitizeRouteData: hotspots not array'); nd.hotspots = []; }
+
+      const before = nd.connections.length;
+      nd.connections = nd.connections.filter(id => validIds.has(id));
+      droppedConnections += before - nd.connections.length;
+
+      const hBefore = nd.hotspots.length;
+      nd.hotspots = nd.hotspots.filter(h => VALID_HOTSPOT_TYPES.includes(h.type));
+      nd.hotspots = nd.hotspots.filter(h => h.type !== 'link' || validIds.has(h.content));
+      droppedHotspots += hBefore - nd.hotspots.length;
     });
+
+    return { droppedConnections, droppedHotspots };
+  },
+
+  /** Reconstruct a single raw route record into a live route object. */
+  _reconstructRoute(rd) {
+    const promises = [];
+    const route = { id: rd.id, name: rd.name, desc: rd.desc || '', documents: (rd.documents || []).map(d => ({...d})), nodes: [], floors: [] };
+    if (rd.floors && rd.floors.length) {
+      rd.floors.forEach(f => {
+        const fl = { id: f.id, name: f.name, image: null };
+        if (f.imageSrc) {
+          fl.image = new Image();
+          promises.push(new Promise(res => { fl.image.onload = fl.image.onerror = res; }));
+          fl.image.src = f.imageSrc;
+        }
+        route.floors.push(fl);
+      });
+    } else if (rd.floorplan) {
+      const fp = new Image();
+      promises.push(new Promise(res => { fp.onload = fp.onerror = res; }));
+      fp.src = rd.floorplan;
+      route.floors.push({ id: 'F0', name: 'Floor 1', image: fp });
+    } else {
+      route.floors.push({ id: 'F0', name: 'Floor 1', image: null });
+    }
     (rd.nodes || []).forEach(nd => {
       let image = null;
       if (nd.imageSrc) {
@@ -3678,139 +3591,204 @@ async function loadFromBaked(data) {
         route.nodes[i+1].connections.push(route.nodes[i].id);
       }
     }
-    routes.push(route);
-  });
-  await Promise.all(promises);
-  if (totalDropped > 0) alert('Some invalid data was repaired on load. Your tours have been cleaned up automatically.');
-}
-async function exportViewerPackage() {
-  if (!routes.length) { alert('No routes to export.'); return; }
-  showLoader('Generating viewer package…');
-  try {
-    const data = serializeRoutesForExport();
-    const dataJson = JSON.stringify(data);
+    return { route, promises };
+  },
 
-    // Get current page HTML (script content preserved as-is in outerHTML)
-    let html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-
-    // Escape </ + script> in the baked JSON — the HTML parser would otherwise
-    // terminate the <script> block early if that substring appears in user data
-    // (hotspot text, node names, quiz content, etc.).
-    // JSON allows \/ as an escape for / so the values survive JSON evaluation.
-    const safeJson = dataJson.replace(/<\/script>/gi, '<\\/script>');
-
-    // Inject viewer mode flag and baked route data
-    html = html.replace('let VIEWER_MODE = false;', 'let VIEWER_MODE = true;');
-    html = html.replace('const BAKED_ROUTES = null;', 'const BAKED_ROUTES = ' + safeJson + ';');
-
-    const blob = new Blob([html], { type: 'text/html' });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement('a');
-    a.href = url; a.download = 'viewer.html'; a.click();
-    URL.revokeObjectURL(url);
-  } catch (e) {
-    alert('Export failed: ' + e.message);
-  }
-  hideLoader();
-}
-
-// ══════════════════════════════════════════════════
-// EXPORT / IMPORT
-// ══════════════════════════════════════════════════
-function exportRoutes() {
-  if (!routes.length) { alert('No routes to export.'); return; }
-  const data = serializeRoutesForExport();
-  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = 'facilityview-routes.json';
-  a.click();
-  URL.revokeObjectURL(url);
-}
-async function importRoutes(file) {
-  if (!file) return;
-  const importInput = document.getElementById('importInput');
-  if (importInput) importInput.disabled = true;
-  showLoader('Importing routes...');
-  try {
-    const text = await file.text();
-    let data;
-    try { data = JSON.parse(text); } catch { throw new Error('Invalid JSON — the file may be corrupt or not a FacilityView export.'); }
-    if (!data.routes || !Array.isArray(data.routes)) throw new Error('Invalid file format — missing routes array.');
-    data.routes.forEach((rd, ri) => {
-      if (!rd || typeof rd.name !== 'string') throw new Error(`Route ${ri + 1} is missing a name.`);
-      if (rd.nodes && !Array.isArray(rd.nodes)) throw new Error(`Route "${rd.name}" has invalid nodes.`);
-      (rd.nodes || []).forEach((nd, ni) => {
-        if (!nd || typeof nd.name !== 'string') throw new Error(`Node ${ni + 1} in route "${rd.name}" is missing a name.`);
-      });
-    });
-    const promises = [];
-    const imported = [];
-    let failedImageCount = 0;
-    let totalSanitizeDropped = 0;
-    data.routes.forEach(rd => {
-      const { droppedConnections, droppedHotspots } = sanitizeRouteData(rd);
-      totalSanitizeDropped += droppedConnections + droppedHotspots;
-      const route = { id: uid('R'), name: rd.name, desc: rd.desc || '', documents: (rd.documents || []).map(d => ({...d})), nodes: [], floors: [] };
-      if (rd.floors && rd.floors.length) {
-        rd.floors.forEach(f => {
-          const fl = { id: f.id, name: f.name, image: null };
-          if (f.imageSrc) {
-            fl.image = new Image();
-            promises.push(new Promise(res => { fl.image.onload = res; fl.image.onerror = () => { fl.image = null; failedImageCount++; res(); }; }));
-            fl.image.src = f.imageSrc;
-          }
-          route.floors.push(fl);
+  async load() {
+    if (!FV.persistence.db) return false;
+    return new Promise(resolve => {
+      const tx = FV.persistence.db.transaction('tours', 'readonly');
+      const req = tx.objectStore('tours').get('main');
+      req.onsuccess = async e => {
+        const record = e.target.result;
+        if (!record || !record.routes || !record.routes.length) { resolve(false); return; }
+        const allPromises = [];
+        let totalDropped = 0;
+        record.routes.forEach(rd => {
+          const { droppedConnections, droppedHotspots } = FV.persistence.sanitize(rd);
+          totalDropped += droppedConnections + droppedHotspots;
+          const { route, promises } = FV.persistence._reconstructRoute(rd);
+          allPromises.push(...promises);
+          routes.push(route);
         });
-      } else if (rd.floorplan) {
-        // Old export format
-        const fp = new Image();
-        promises.push(new Promise(res => { fp.onload = res; fp.onerror = () => { failedImageCount++; res(); }; }));
-        fp.src = rd.floorplan;
-        route.floors.push({ id: 'F0', name: 'Floor 1', image: fp });
-      } else {
-        route.floors.push({ id: 'F0', name: 'Floor 1', image: null });
-      }
-      (rd.nodes || []).forEach(nd => {
-        let image = null;
-        if (nd.imageSrc) {
-          image = new Image();
-          promises.push(new Promise(res => { image.onload = res; image.onerror = () => { failedImageCount++; res(); }; }));
-          image.src = nd.imageSrc;
-        }
-        route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, floorId: nd.floorId || null, connections: nd.connections || [], connectionOverrides: nd.connectionOverrides || {}, hotspots: nd.hotspots || [], navArrowColor: nd.navArrowColor || null, quiz: nd.quiz || null });
-      });
-      // Migration: if every node has empty connections[], this is a pre-v2 export — auto-populate sequential connections
-      const allEmpty = route.nodes.every(n => !n.connections || n.connections.length === 0);
-      if (allEmpty && route.nodes.length > 1) {
-        for (let i = 0; i < route.nodes.length - 1; i++) {
-          route.nodes[i].connections.push(route.nodes[i+1].id);
-          route.nodes[i+1].connections.push(route.nodes[i].id);
-        }
-      }
-      imported.push(route);
+        await Promise.all(allPromises);
+        if (totalDropped > 0) alert('Some invalid data was repaired on load. Your tours have been cleaned up automatically.');
+        resolve(true);
+      };
+      req.onerror = () => resolve(false);
     });
-    await Promise.all(promises);
-    imported.forEach(r => routes.push(r));
-    saveRoutes();
-    rebuildRouteSelect();
-    if (imported.length > 0) {
-      selectRoute(routes.indexOf(imported[0]));
-      document.getElementById('welcome').classList.add('hidden');
+  },
+
+  flashSaved() {
+    const el = document.getElementById('savedIndicator');
+    el.classList.add('visible');
+    setTimeout(() => el.classList.remove('visible'), 1500);
+  },
+
+  serialize() {
+    return {
+      version: 1,
+      exported: new Date().toISOString(),
+      routes: routes.map(r => ({
+        id: r.id, name: r.name, desc: r.desc,
+        documents: (r.documents || []).map(d => ({ ...d })),
+        floors: (r.floors || []).map(f => ({ id: f.id, name: f.name, imageSrc: f.image ? f.image.src : null })),
+        nodes: r.nodes.map(n => ({
+          id: n.id, name: n.name, desc: n.desc,
+          imageSrc: n.image ? n.image.src : null,
+          mapX: n.mapX, mapY: n.mapY,
+          floorId: n.floorId || null,
+          connections: n.connections || [],
+          connectionOverrides: n.connectionOverrides || {},
+          hotspots: n.hotspots || [],
+          navArrowColor: n.navArrowColor || null,
+          quiz: n.quiz || null,
+          thumbUrl: null
+        }))
+      }))
+    };
+  },
+
+  async loadFromBaked(data) {
+    const allPromises = [];
+    let totalDropped = 0;
+    (data.routes || []).forEach(rd => {
+      const { droppedConnections, droppedHotspots } = FV.persistence.sanitize(rd);
+      totalDropped += droppedConnections + droppedHotspots;
+      const { route, promises } = FV.persistence._reconstructRoute(rd);
+      allPromises.push(...promises);
+      routes.push(route);
+    });
+    await Promise.all(allPromises);
+    if (totalDropped > 0) alert('Some invalid data was repaired on load. Your tours have been cleaned up automatically.');
+  },
+
+  async exportViewerPackage() {
+    if (!routes.length) { alert('No routes to export.'); return; }
+    showLoader('Generating viewer package…');
+    try {
+      const data = FV.persistence.serialize();
+      const dataJson = JSON.stringify(data);
+      let html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+      const safeJson = dataJson.replace(/<\/script>/gi, '<\\/script>');
+      html = html.replace('let VIEWER_MODE = false;', 'let VIEWER_MODE = true;');
+      html = html.replace('const BAKED_ROUTES = null;', 'const BAKED_ROUTES = ' + safeJson + ';');
+      const blob = new Blob([html], { type: 'text/html' });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement('a');
+      a.href = url; a.download = 'viewer.html'; a.click();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      alert('Export failed: ' + e.message);
     }
     hideLoader();
-    const names = imported.map(r => `  • ${r.name} (${r.nodes.length} node${r.nodes.length !== 1 ? 's' : ''})`).join('\n');
-    const failMsg = failedImageCount ? `\n\n⚠ ${failedImageCount} image(s) failed to load.` : '';
-    const sanitizeMsg = totalSanitizeDropped ? `\n\n⚠ ${totalSanitizeDropped} invalid connection(s)/hotspot(s) were removed automatically.` : '';
-    alert(`Imported ${imported.length} route(s):\n${names}${failMsg}${sanitizeMsg}`);
-  } catch (e) {
-    hideLoader();
-    alert('Import failed: ' + e.message);
-  } finally {
-    if (importInput) importInput.disabled = false;
+  },
+
+  exportRoutes() {
+    if (!routes.length) { alert('No routes to export.'); return; }
+    const data = FV.persistence.serialize();
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'facilityview-routes.json';
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+
+  async importRoutes(file) {
+    if (!file) return;
+    const importInput = document.getElementById('importInput');
+    if (importInput) importInput.disabled = true;
+    showLoader('Importing routes...');
+    try {
+      const text = await file.text();
+      let data;
+      try { data = JSON.parse(text); } catch { throw new Error('Invalid JSON — the file may be corrupt or not a FacilityView export.'); }
+      if (!data.routes || !Array.isArray(data.routes)) throw new Error('Invalid file format — missing routes array.');
+      data.routes.forEach((rd, ri) => {
+        if (!rd || typeof rd.name !== 'string') throw new Error(`Route ${ri + 1} is missing a name.`);
+        if (rd.nodes && !Array.isArray(rd.nodes)) throw new Error(`Route "${rd.name}" has invalid nodes.`);
+        (rd.nodes || []).forEach((nd, ni) => {
+          if (!nd || typeof nd.name !== 'string') throw new Error(`Node ${ni + 1} in route "${rd.name}" is missing a name.`);
+        });
+      });
+      const allPromises = [];
+      const imported = [];
+      let failedImageCount = 0;
+      let totalSanitizeDropped = 0;
+      data.routes.forEach(rd => {
+        const { droppedConnections, droppedHotspots } = FV.persistence.sanitize(rd);
+        totalSanitizeDropped += droppedConnections + droppedHotspots;
+        const route = { id: uid('R'), name: rd.name, desc: rd.desc || '', documents: (rd.documents || []).map(d => ({...d})), nodes: [], floors: [] };
+        if (rd.floors && rd.floors.length) {
+          rd.floors.forEach(f => {
+            const fl = { id: f.id, name: f.name, image: null };
+            if (f.imageSrc) {
+              fl.image = new Image();
+              allPromises.push(new Promise(res => { fl.image.onload = res; fl.image.onerror = () => { fl.image = null; failedImageCount++; res(); }; }));
+              fl.image.src = f.imageSrc;
+            }
+            route.floors.push(fl);
+          });
+        } else if (rd.floorplan) {
+          const fp = new Image();
+          allPromises.push(new Promise(res => { fp.onload = res; fp.onerror = () => { failedImageCount++; res(); }; }));
+          fp.src = rd.floorplan;
+          route.floors.push({ id: 'F0', name: 'Floor 1', image: fp });
+        } else {
+          route.floors.push({ id: 'F0', name: 'Floor 1', image: null });
+        }
+        (rd.nodes || []).forEach(nd => {
+          let image = null;
+          if (nd.imageSrc) {
+            image = new Image();
+            allPromises.push(new Promise(res => { image.onload = res; image.onerror = () => { failedImageCount++; res(); }; }));
+            image.src = nd.imageSrc;
+          }
+          route.nodes.push({ id: nd.id, name: nd.name, desc: nd.desc || '', image, mapX: nd.mapX, mapY: nd.mapY, floorId: nd.floorId || null, connections: nd.connections || [], connectionOverrides: nd.connectionOverrides || {}, hotspots: nd.hotspots || [], navArrowColor: nd.navArrowColor || null, quiz: nd.quiz || null });
+        });
+        const allEmpty = route.nodes.every(n => !n.connections || n.connections.length === 0);
+        if (allEmpty && route.nodes.length > 1) {
+          for (let i = 0; i < route.nodes.length - 1; i++) {
+            route.nodes[i].connections.push(route.nodes[i+1].id);
+            route.nodes[i+1].connections.push(route.nodes[i].id);
+          }
+        }
+        imported.push(route);
+      });
+      await Promise.all(allPromises);
+      imported.forEach(r => routes.push(r));
+      FV.persistence.save();
+      rebuildRouteSelect();
+      if (imported.length > 0) {
+        selectRoute(routes.indexOf(imported[0]));
+        document.getElementById('welcome').classList.add('hidden');
+      }
+      hideLoader();
+      const names = imported.map(r => `  • ${r.name} (${r.nodes.length} node${r.nodes.length !== 1 ? 's' : ''})`).join('\n');
+      const failMsg = failedImageCount ? `\n\n⚠ ${failedImageCount} image(s) failed to load.` : '';
+      const sanitizeMsg = totalSanitizeDropped ? `\n\n⚠ ${totalSanitizeDropped} invalid connection(s)/hotspot(s) were removed automatically.` : '';
+      alert(`Imported ${imported.length} route(s):\n${names}${failMsg}${sanitizeMsg}`);
+    } catch (e) {
+      hideLoader();
+      alert('Import failed: ' + e.message);
+    } finally {
+      if (importInput) importInput.disabled = false;
+    }
   }
-}
+};
+// Backward-compat shims — saveRoutes() is called from ~30 places, keep as global
+function openDB() { return FV.persistence.openDB(); }
+function saveRoutes() { FV.persistence.save(); }
+function loadRoutes() { return FV.persistence.load(); }
+function sanitizeRouteData(rd) { return FV.persistence.sanitize(rd); }
+function flashSavedIndicator() { FV.persistence.flashSaved(); }
+function serializeRoutesForExport() { return FV.persistence.serialize(); }
+function loadFromBaked(data) { return FV.persistence.loadFromBaked(data); }
+function exportViewerPackage() { return FV.persistence.exportViewerPackage(); }
+function exportRoutes() { FV.persistence.exportRoutes(); }
+function importRoutes(file) { return FV.persistence.importRoutes(file); }
 document.getElementById('importInput').addEventListener('change', function() {
   if (this.files[0]) importRoutes(this.files[0]);
   this.value = '';
