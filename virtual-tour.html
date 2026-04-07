@@ -1719,24 +1719,18 @@ function refreshModalConnections() {
 }
 function addConnectionFromModal() {
   const targetId = document.getElementById('modalConnTarget').value; if (!targetId) return;
-  const nodes  = currentNodes();
-  const node   = nodes[renameTargetIdx]; if (!node) return;
-  const target = nodes.find(n => n.id === targetId); if (!target) return;
-  node.connections   = node.connections || [];
-  target.connections = target.connections || [];
-  if (!node.connections.includes(targetId)) node.connections.push(targetId);
-  if (!target.connections.includes(node.id)) target.connections.push(node.id);
+  const nodes = currentNodes();
+  const node  = nodes[renameTargetIdx]; if (!node) return;
+  if (!FV.connections.add(nodes, node.id, targetId)) return;
   refreshModalConnections();
   if (mapEditorOpen) { buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor(); }
   if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
   drawMinimap(); saveRoutes();
 }
 function removeConnectionFromModal(targetId) {
-  const nodes  = currentNodes();
-  const node   = nodes[renameTargetIdx]; if (!node) return;
-  const target = nodes.find(n => n.id === targetId);
-  node.connections = (node.connections || []).filter(id => id !== targetId);
-  if (target) target.connections = (target.connections || []).filter(id => id !== node.id);
+  const nodes = currentNodes();
+  const node  = nodes[renameTargetIdx]; if (!node) return;
+  FV.connections.remove(nodes, node.id, targetId);
   refreshModalConnections();
   if (mapEditorOpen) { buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor(); }
   if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
@@ -1747,11 +1741,7 @@ function removeAllConnectionsFromModal() {
   const node  = nodes[renameTargetIdx]; if (!node) return;
   if (!(node.connections || []).length) return;
   if (!confirm(`Remove all ${node.connections.length} connection(s) from ${node.name}?`)) return;
-  node.connections.forEach(cid => {
-    const t = nodes.find(n => n.id === cid);
-    if (t) t.connections = (t.connections || []).filter(id => id !== node.id);
-  });
-  node.connections = [];
+  FV.connections.removeAll(nodes, node.id);
   refreshModalConnections();
   if (mapEditorOpen) { buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor(); }
   if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
@@ -2913,9 +2903,7 @@ function removeConnection(nodeIdx, targetId) {
   pushUndo();
   const nodes = currentNodes();
   const node = nodes[nodeIdx]; if (!node) return;
-  node.connections = (node.connections || []).filter(id => id !== targetId);
-  const target = nodes.find(n => n.id === targetId);
-  if (target) target.connections = (target.connections || []).filter(id => id !== node.id);
+  FV.connections.remove(nodes, node.id, targetId);
   buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor(); saveRoutes();
   if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
 }
@@ -2923,11 +2911,7 @@ function removeAllConnections(nodeIdx) {
   pushUndo();
   const nodes = currentNodes();
   const node = nodes[nodeIdx]; if (!node) return;
-  (node.connections || []).forEach(targetId => {
-    const target = nodes.find(n => n.id === targetId);
-    if (target) target.connections = (target.connections || []).filter(id => id !== node.id);
-  });
-  node.connections = [];
+  FV.connections.removeAll(nodes, node.id);
   buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor(); saveRoutes();
   if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
 }
@@ -3103,15 +3087,7 @@ mapEdCanvas.addEventListener('mousedown', e => {
     } else {
       pushUndo();
       const nA = nodes[mapConnectFirstNodeIdx], nB = nodes[clickedIdx];
-      nA.connections = nA.connections || [];
-      nB.connections = nB.connections || [];
-      if (nA.connections.includes(nB.id)) {
-        nA.connections = nA.connections.filter(id => id !== nB.id);
-        nB.connections = nB.connections.filter(id => id !== nA.id);
-      } else {
-        nA.connections.push(nB.id);
-        nB.connections.push(nA.id);
-      }
+      FV.connections.toggle(nodes, nA.id, nB.id);
       mapConnectFirstNodeIdx = -1;
       mapSelectedNodeIdx = clickedIdx;
       buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor();
@@ -3385,6 +3361,67 @@ function toggleFullscreen() {
 FV.modals = {
   open(id)  { document.getElementById(id).classList.add('open'); },
   close(id) { document.getElementById(id).classList.remove('open'); }
+};
+
+// ══════════════════════════════════════════════════
+// CONNECTIONS MODULE (FV.connections)
+// Pure bidirectional connection graph CRUD on a nodes[] array.
+// Callers handle persistence, undo, and UI redraws.
+// ══════════════════════════════════════════════════
+FV.connections = {
+  // Add a bidirectional connection between two node IDs. Returns true if added.
+  add(nodes, fromId, toId) {
+    if (fromId === toId) return false;
+    const a = nodes.find(n => n.id === fromId);
+    const b = nodes.find(n => n.id === toId);
+    if (!a || !b) return false;
+    a.connections = a.connections || [];
+    b.connections = b.connections || [];
+    let changed = false;
+    if (!a.connections.includes(toId))   { a.connections.push(toId);   changed = true; }
+    if (!b.connections.includes(fromId)) { b.connections.push(fromId); changed = true; }
+    return changed;
+  },
+  // Remove a bidirectional connection between two node IDs. Returns true if removed.
+  remove(nodes, fromId, toId) {
+    const a = nodes.find(n => n.id === fromId);
+    const b = nodes.find(n => n.id === toId);
+    let changed = false;
+    if (a) {
+      const before = (a.connections || []).length;
+      a.connections = (a.connections || []).filter(id => id !== toId);
+      if (a.connections.length !== before) changed = true;
+    }
+    if (b) {
+      const before = (b.connections || []).length;
+      b.connections = (b.connections || []).filter(id => id !== fromId);
+      if (b.connections.length !== before) changed = true;
+    }
+    return changed;
+  },
+  // Remove all connections from a single node (and the back-references on its peers).
+  removeAll(nodes, nodeId) {
+    const node = nodes.find(n => n.id === nodeId);
+    if (!node || !(node.connections || []).length) return false;
+    node.connections.forEach(cid => {
+      const t = nodes.find(n => n.id === cid);
+      if (t) t.connections = (t.connections || []).filter(id => id !== nodeId);
+    });
+    node.connections = [];
+    return true;
+  },
+  // Toggle a bidirectional connection. Returns 'added' | 'removed' | 'noop'.
+  toggle(nodes, idA, idB) {
+    if (idA === idB) return 'noop';
+    const a = nodes.find(n => n.id === idA);
+    if (!a) return 'noop';
+    if ((a.connections || []).includes(idB)) {
+      FV.connections.remove(nodes, idA, idB);
+      return 'removed';
+    }
+    FV.connections.add(nodes, idA, idB);
+    return 'added';
+  }
 };
 // Backward-compat shims — called from ~30 HTML onclick + JS callsites
 function openModal(id)  { FV.modals.open(id); }
