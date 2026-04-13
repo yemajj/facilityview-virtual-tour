@@ -1452,7 +1452,7 @@ window.addEventListener('keydown', e => {
 // ══════════════════════════════════════════════════
 // ROUTE MANAGEMENT
 // ══════════════════════════════════════════════════
-document.getElementById('btnNewRoute').addEventListener('click', openNewRouteModal);
+document.getElementById('btnNewRoute').addEventListener('click', () => FV.routes.openNewRouteModal());
 function openNewRouteModal() {
   document.getElementById('newRouteName').value = '';
   document.getElementById('newRouteDesc').value  = '';
@@ -1536,7 +1536,7 @@ function rebuildRouteSelect() {
 }
 document.getElementById('routeSelect').addEventListener('change', function() {
   const idx = parseInt(this.value);
-  if (!isNaN(idx)) selectRoute(idx);
+  if (!isNaN(idx)) FV.routes.selectRoute(idx);
 });
 function selectRoute(idx) {
   currentRouteIdx = idx; currentNodeIdx = -1; img = null;
@@ -4361,6 +4361,121 @@ function updateNodeCount()                   { FV.nodes.updateNodeCount(); }
 function getThumbnail(node)                  { return FV.nodes.getThumbnail(node); }
 function buildSidebar()                      { FV.nodes.buildSidebar(); }
 function reorderNode(from, to)               { FV.nodes.reorderNode(from, to); }
+
+// ══════════════════════════════════════════════════
+// ROUTES MODULE (FV.routes)
+// ══════════════════════════════════════════════════
+FV.routes = {
+  openNewRouteModal() {
+    document.getElementById('newRouteName').value = '';
+    document.getElementById('newRouteDesc').value  = '';
+    FV.modals.open('modalNewRoute');
+    setTimeout(() => document.getElementById('newRouteName').focus(), 100);
+  },
+
+  confirmNewRoute() {
+    const name = document.getElementById('newRouteName').value.trim();
+    if (!name) { document.getElementById('newRouteName').focus(); return; }
+    const route = { id: uid('R'), name, desc: document.getElementById('newRouteDesc').value.trim(), documents: [], nodes: [], floors: [{ id: 'F0', name: 'Floor 1', image: null }] };
+    routes.push(route);
+    FV.modals.close('modalNewRoute');
+    FV.routes.rebuildRouteSelect();
+    FV.routes.selectRoute(routes.length - 1);
+    document.getElementById('welcome').classList.add('hidden');
+    saveRoutes();
+  },
+
+  duplicateRoute() {
+    const src = currentRoute();
+    if (!src) { alert('Select a route to duplicate.'); return; }
+    const copy = {
+      id: uid('R'),
+      name: src.name + ' (copy)',
+      desc: src.desc,
+      documents: (src.documents || []).map(d => ({ ...d })),
+      floors: (src.floors || []).map(f => ({ id: f.id, name: f.name, image: f.image })),
+      nodes: src.nodes.map(n => ({
+        id: n.id, name: n.name, desc: n.desc,
+        image: n.image,
+        thumbUrl: n.thumbUrl || null,
+        mapX: n.mapX, mapY: n.mapY,
+        floorId: n.floorId || null,
+        connections: [...(n.connections || [])],
+        connectionOverrides: Object.assign({}, n.connectionOverrides || {}),
+        hotspots: (n.hotspots || []).map(h => ({ ...h, quiz: h.quiz ? { ...h.quiz, options: [...h.quiz.options] } : h.quiz })),
+        navArrowColor: n.navArrowColor || null,
+        quiz: n.quiz ? { ...n.quiz, options: [...n.quiz.options] } : null
+      }))
+    };
+    routes.push(copy);
+    FV.routes.rebuildRouteSelect();
+    FV.routes.selectRoute(routes.length - 1);
+    document.getElementById('welcome').classList.add('hidden');
+    saveRoutes();
+  },
+
+  deleteRoute() {
+    if (!currentRoute()) { alert('No route selected.'); return; }
+    const name = currentRoute().name;
+    const nodeCount = currentNodes().length;
+    const msg = nodeCount
+      ? `Delete "${name}" and its ${nodeCount} node${nodeCount > 1 ? 's' : ''}? This cannot be undone.`
+      : `Delete "${name}"? This cannot be undone.`;
+    if (!confirm(msg)) return;
+    routes.splice(currentRouteIdx, 1);
+    const newIdx = Math.min(currentRouteIdx, routes.length - 1);
+    currentRouteIdx = -1;
+    currentNodeIdx = -1;
+    img = null;
+    FV.routes.rebuildRouteSelect();
+    if (routes.length > 0) {
+      FV.routes.selectRoute(newIdx);
+    } else {
+      document.getElementById('sidebarRouteBadge').textContent = 'NO ROUTE';
+      FV.nodes.buildSidebar(); drawMinimap(); FV.nodes.updateNodeCount(); clearViewer();
+      document.getElementById('welcome').classList.remove('hidden');
+    }
+    saveRoutes();
+  },
+
+  rebuildRouteSelect() {
+    const sel = document.getElementById('routeSelect');
+    sel.innerHTML = '';
+    if (!routes.length) { sel.innerHTML = '<option value="">— No routes yet —</option>'; return; }
+    routes.forEach((r, i) => {
+      const o = document.createElement('option');
+      o.value = i;
+      o.textContent = r.name + (r.nodes.length ? ` (${r.nodes.length})` : '');
+      sel.appendChild(o);
+    });
+    sel.value = currentRouteIdx >= 0 ? currentRouteIdx : 0;
+  },
+
+  selectRoute(idx) {
+    currentRouteIdx = idx; currentNodeIdx = -1; img = null;
+    FV.quiz.resetSession();
+    if (window._quizKeyHandler) { document.removeEventListener('keydown', window._quizKeyHandler); window._quizKeyHandler = null; }
+    document.getElementById('quizOverlay').style.display = 'none';
+    FV.session.reset();
+    mapSelectedNodeIdx = -1; mapConnectFirstNodeIdx = -1;
+    const route = currentRoute();
+    document.getElementById('sidebarRouteBadge').textContent = route ? route.name : 'NO ROUTE';
+    document.getElementById('routeSelect').value = idx;
+    FV.nodes.buildSidebar(); drawMinimap(); FV.nodes.updateNodeCount();
+    if (sidebarView === 'docs') buildDocList();
+    document.getElementById('overlay').style.opacity = '0';
+    document.getElementById('hotspots').style.opacity = '0';
+    clearViewer();
+    if (route && route.nodes.length > 0) navigateTo(0);
+  }
+};
+// Backward-compat shims
+function openNewRouteModal()  { FV.routes.openNewRouteModal(); }
+function confirmNewRoute()    { FV.routes.confirmNewRoute(); }
+function duplicateRoute()     { FV.routes.duplicateRoute(); }
+function deleteRoute()        { FV.routes.deleteRoute(); }
+function rebuildRouteSelect() { FV.routes.rebuildRouteSelect(); }
+function selectRoute(idx)     { FV.routes.selectRoute(idx); }
 
 // ══════════════════════════════════════════════════
 // DEMO DATA
