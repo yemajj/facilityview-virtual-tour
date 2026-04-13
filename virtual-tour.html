@@ -1268,12 +1268,7 @@ const MAP_UNDO_LIMIT = 50;
 // Crossfade state
 let isFading = false, fadeTimeout = null;
 
-// Custom hotspot state
-let hotspotEditMode = false;
-let pendingHotspotYaw = 0, pendingHotspotPitch = 0;
-let editingHotspotId = null;       // null = new, string = editing existing
-let repositioningHotspotId = null; // null = normal, string = reposition in progress
-let pendingHotspotFileData = null; // { dataUrl, filename } for image/file hotspots
+// Custom hotspot state — now managed by FV.hotspots module (see below)
 
 // Kiosk mode — now managed by FV.kiosk module (see below)
 
@@ -2182,16 +2177,15 @@ function updateHUD() {
 }
 
 // ══════════════════════════════════════════════════
-// HOTSPOTS
+// HOTSPOTS — implementations in FV.hotspots module; shims below module definition
 // ══════════════════════════════════════════════════
 function buildHotspots(index) {
+  // TEMP STUB — real impl in FV.hotspots; shim defined after module; this stub is unreachable
   const container = document.getElementById('hotspots');
   container.innerHTML = '';
   const nodes = currentNodes();
   const current = nodes[index];
   const targets = [];
-  // All navigation is driven by connections[] — linear prev/next is auto-populated
-  // on node creation and can be removed via the Connect tool in the map editor
   const overrides = (current && current.connectionOverrides) ? current.connectionOverrides : {};
   (current && current.connections ? current.connections : []).forEach(targetId => {
     const targetIdx = nodes.findIndex(n => n.id === targetId);
@@ -3219,22 +3213,22 @@ canvas.addEventListener('mousedown', e => {
   canvas.classList.add('dragging');
 });
 canvas.addEventListener('click', e => {
-  if (!hotspotEditMode || !img) return;
+  if (!FV.hotspots.editMode || !img) return;
   if (Math.hypot(e.clientX - mouseDownX, e.clientY - mouseDownY) > 5) return;
-  const pos = canvasClickToYawPitch(e.clientX, e.clientY);
-  toggleHotspotEditMode();
-  if (repositioningHotspotId) {
+  const pos = FV.hotspots.canvasClickToYawPitch(e.clientX, e.clientY);
+  FV.hotspots.toggleEditMode();
+  if (FV.hotspots.repositioningId) {
     const node = currentNodes()[currentNodeIdx];
     if (node) {
-      const hs = (node.hotspots || []).find(h => h.id === repositioningHotspotId);
+      const hs = (node.hotspots || []).find(h => h.id === FV.hotspots.repositioningId);
       if (hs) { hs.yaw = pos.yaw; hs.pitch = pos.pitch; }
     }
-    repositioningHotspotId = null;
-    buildHotspots(currentNodeIdx);
+    FV.hotspots.repositioningId = null;
+    FV.hotspots.build(currentNodeIdx);
     saveRoutes();
-    openManageHotspotsModal();
+    FV.hotspots.openManageModal();
   } else {
-    openAddHotspotModal(pos.yaw, pos.pitch);
+    FV.hotspots.openAddModal(pos.yaw, pos.pitch);
   }
 });
 window.addEventListener('mouseup', () => {
@@ -3433,7 +3427,563 @@ document.getElementById('newRouteName').addEventListener('keydown', e => { if (e
 document.getElementById('newRouteDesc').addEventListener('keydown', e => { if (e.key==='Enter') confirmNewRoute(); });
 document.getElementById('renameNodeName').addEventListener('keydown', e => { if (e.key==='Enter') confirmRenameNode(); });
 document.getElementById('hotspotLabel').addEventListener('keydown', e => { if (e.key==='Enter') confirmAddHotspot(); });
-document.getElementById('hotspotType').addEventListener('change', updateHotspotTypeFields);
+document.getElementById('hotspotType').addEventListener('change', () => FV.hotspots.updateTypeFields());
+
+// ══════════════════════════════════════════════════
+// HOTSPOTS MODULE (FV.hotspots)
+// ══════════════════════════════════════════════════
+FV.hotspots = {
+  // ── State ──
+  editMode: false,
+  pendingYaw: 0, pendingPitch: 0,
+  editingId: null,
+  repositioningId: null,
+  pendingFileData: null,
+  _helperArrowSvg: `<svg viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg>`,
+
+  build(index) {
+    const container = document.getElementById('hotspots');
+    container.innerHTML = '';
+    const nodes = currentNodes();
+    const current = nodes[index];
+    const targets = [];
+    const overrides = (current && current.connectionOverrides) ? current.connectionOverrides : {};
+    (current && current.connections ? current.connections : []).forEach(targetId => {
+      const targetIdx = nodes.findIndex(n => n.id === targetId);
+      if (targetIdx < 0) return;
+      const target = nodes[targetIdx];
+      const ov = overrides[targetId];
+      let angle = 0;
+      if (ov && ov.customYaw !== null && ov.customYaw !== undefined) {
+        angle = ov.customYaw;
+      } else if (current.mapX !== null && target.mapX !== null) {
+        angle = Math.atan2(target.mapX - current.mapX, -(target.mapY - current.mapY));
+      }
+      const pitch = (ov && ov.customPitch !== null && ov.customPitch !== undefined) ? ov.customPitch : -0.12;
+      targets.push({ idx: targetIdx, angle, pitch, label: target.name, targetId, hasOverride: !!(ov && ov.customYaw !== null && ov.customYaw !== undefined) });
+    });
+    const nodeColor = current && current.navArrowColor ? current.navArrowColor : null;
+    targets.forEach(t => {
+      const el = document.createElement('div');
+      el.className = 'hotspot';
+      el.dataset.angle = t.angle;
+      el.dataset.pitch = t.pitch;
+      el.dataset.connId = t.targetId;
+      el.innerHTML = `
+        <div class="hotspot-arrow">
+          <svg viewBox="0 0 24 24"><path d="M12 2l-5.5 9h11z"/></svg>
+        </div>
+        <div class="hotspot-label">${escapeHtml(t.label)}</div>`;
+      if (t.hasOverride) el.classList.add('nav-arrow-custom');
+      if (nodeColor) {
+        const arrowEl = el.querySelector('.hotspot-arrow');
+        const r = parseInt(nodeColor.slice(1,3),16), g = parseInt(nodeColor.slice(3,5),16), b = parseInt(nodeColor.slice(5,7),16);
+        arrowEl.style.borderColor = nodeColor;
+        arrowEl.style.background = `rgba(${r},${g},${b},0.15)`;
+        arrowEl.querySelector('svg').style.fill = nodeColor;
+      }
+      el.style.pointerEvents = 'all';
+      el.tabIndex = 0; el.setAttribute('role', 'button'); el.setAttribute('aria-label', 'Navigate to ' + t.label);
+      let dragStartX = null, dragStartY = null, isDraggingArrow = false;
+      let onDocMove, onDocUp;
+      el.addEventListener('mousedown', e => {
+        if (FV.kiosk.active) return;
+        dragStartX = e.clientX; dragStartY = e.clientY; isDraggingArrow = false;
+        onDocMove = ev => {
+          if (dragStartX === null) return;
+          if (!isDraggingArrow && (Math.abs(ev.clientX - dragStartX) > 8 || Math.abs(ev.clientY - dragStartY) > 8)) {
+            isDraggingArrow = true;
+            el.classList.add('nav-arrow-dragging');
+          }
+          if (isDraggingArrow) {
+            const pos = FV.hotspots.canvasClickToYawPitch(ev.clientX, ev.clientY);
+            el.dataset.angle = pos.yaw;
+            el.dataset.pitch = pos.pitch;
+            el._hsVis = undefined; el._hsX = undefined; el._hsY = undefined;
+            FV.hotspots.updatePositions();
+            ev.stopPropagation();
+          }
+        };
+        onDocUp = ev => {
+          document.removeEventListener('mousemove', onDocMove);
+          document.removeEventListener('mouseup', onDocUp);
+          if (isDraggingArrow) {
+            const pos = FV.hotspots.canvasClickToYawPitch(ev.clientX, ev.clientY);
+            const node = currentNodes()[currentNodeIdx];
+            if (node) {
+              node.connectionOverrides = node.connectionOverrides || {};
+              node.connectionOverrides[t.targetId] = { customYaw: pos.yaw, customPitch: pos.pitch };
+              el.classList.add('nav-arrow-custom');
+              el.classList.remove('nav-arrow-dragging');
+              saveRoutes();
+            }
+          }
+          dragStartX = null; dragStartY = null; isDraggingArrow = false;
+        };
+        document.addEventListener('mousemove', onDocMove);
+        document.addEventListener('mouseup', onDocUp);
+        e.stopPropagation();
+      });
+      el.addEventListener('click', e => { if (!isDraggingArrow) navigateTo(t.idx); });
+      el.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        if (FV.kiosk.active) return;
+        if (t.hasOverride || (current.connectionOverrides && current.connectionOverrides[t.targetId])) {
+          if (confirm(`Reset arrow position for "${t.label}" back to auto?`)) {
+            const node = currentNodes()[currentNodeIdx];
+            if (node && node.connectionOverrides) { delete node.connectionOverrides[t.targetId]; saveRoutes(); FV.hotspots.build(currentNodeIdx); }
+          }
+        }
+      });
+      el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigateTo(t.idx); } });
+      container.appendChild(el);
+    });
+    if (current) {
+      (current.hotspots || []).forEach(hs => {
+        const el = document.createElement('div');
+        el.className = 'hotspot-custom';
+        el.dataset.angle = hs.yaw;
+        el.dataset.pitch = hs.pitch;
+        const resolvedIcon = hs.icon || (hs.type === 'link' ? 'link' : 'info');
+        const iconSvg = HOTSPOT_ICONS[resolvedIcon] || HOTSPOT_ICONS.info;
+        const pinColor = hs.color || HOTSPOT_ICON_DEFAULTS[resolvedIcon] || '#00c8ff';
+        const pinEl = document.createElement('div');
+        pinEl.className = `hotspot-pin ${hs.type}-type`;
+        if (hs.color) {
+          const r = parseInt(pinColor.slice(1,3),16), g = parseInt(pinColor.slice(3,5),16), b = parseInt(pinColor.slice(5,7),16);
+          pinEl.style.borderColor = pinColor;
+          pinEl.style.background = `rgba(${r},${g},${b},0.15)`;
+        }
+        pinEl.innerHTML = iconSvg;
+        if (hs.color) pinEl.querySelector('svg').style.color = pinColor;
+        const labelEl = document.createElement('div');
+        labelEl.className = 'hotspot-custom-label';
+        labelEl.textContent = hs.label;
+        el.appendChild(pinEl); el.appendChild(labelEl);
+        el.style.pointerEvents = 'all';
+        el.tabIndex = 0; el.setAttribute('role', 'button'); el.setAttribute('aria-label', hs.label + ' (' + hs.type + ')');
+        if (hs.type === 'info') {
+          el.addEventListener('click', () => FV.hotspots.showInfo(hs));
+        } else if (hs.type === 'link') {
+          el.addEventListener('click', () => {
+            const target = nodes.find(n => n.id === hs.content);
+            if (target) navigateTo(nodes.indexOf(target));
+          });
+        } else if (hs.type === 'url') {
+          el.addEventListener('click', () => { if (hs.content && isSafeUrl(hs.content)) window.open(hs.content, '_blank'); });
+        } else if (hs.type === 'image') {
+          el.addEventListener('click', () => FV.hotspots.showImage(hs));
+        } else if (hs.type === 'file') {
+          el.addEventListener('click', () => { if (hs.content && (isSafeUrl(hs.content) || hs.content.startsWith('data:'))) window.open(hs.content, '_blank'); });
+        } else if (hs.type === 'quiz') {
+          el.addEventListener('click', () => {
+            if (hs.quiz && !FV.quiz.answered[hs.id]) FV.quiz.showQuestion({ id: hs.id, name: hs.label, quiz: hs.quiz });
+          });
+        }
+        el.addEventListener('contextmenu', e => {
+          e.preventDefault();
+          if (confirm(`Delete hotspot "${hs.label}"?`)) FV.hotspots.delete(index, hs.id);
+        });
+        container.appendChild(el);
+      });
+    }
+    FV.hotspots.updatePositions();
+    FV.hotspots.updateHelperArrows();
+  },
+
+  updatePositions() {
+    const W = canvas.width, H = canvas.height;
+    const fovRad = fov * Math.PI / 180;
+    const halfFov = fovRad / 2, halfFovV = halfFov / (W/H);
+    document.querySelectorAll('.hotspot, .hotspot-custom').forEach(el => {
+      const worldYaw = parseFloat(el.dataset.angle) || 0;
+      const relYaw   = worldYaw - yaw;
+      const normYaw  = ((relYaw + Math.PI) % (2*Math.PI) + 2*Math.PI) % (2*Math.PI) - Math.PI;
+      const relPitch = (el.dataset.pitch !== undefined && el.dataset.pitch !== '')
+        ? (parseFloat(el.dataset.pitch) || 0) - pitch
+        : -0.12 - pitch;
+      const visible = Math.abs(normYaw) < halfFov * 0.88 && Math.abs(relPitch) < halfFovV;
+      const wasVisible = el._hsVis;
+      if (visible !== wasVisible) {
+        el.style.display = visible ? 'flex' : 'none';
+        el._hsVis = visible;
+      }
+      if (!visible) return;
+      const pxVal = Math.round(W/2 + (normYaw / halfFov) * W/2);
+      const pyVal = Math.round(H/2 - (relPitch / halfFovV) * H/2);
+      if (el._hsX !== pxVal) { el.style.left = pxVal + 'px'; el._hsX = pxVal; }
+      if (el._hsY !== pyVal) { el.style.top = pyVal + 'px'; el._hsY = pyVal; }
+      if (!el.classList.contains('hotspot-custom')) {
+        const arrowEl = el.querySelector('.hotspot-arrow');
+        if (arrowEl) arrowEl.style.transform = `rotate(${normYaw * (180 / Math.PI)}deg)`;
+      }
+    });
+  },
+
+  updateHelperArrows() {
+    const container = document.getElementById('helperArrows');
+    if (!container) return;
+    const nodes = currentNodes();
+    const current = nodes[currentNodeIdx];
+    if (!current || !FV.settings.helperArrowsEnabled || document.getElementById('quizOverlay').style.display === 'flex') {
+      container.innerHTML = '';
+      return;
+    }
+    const W = canvas.width, H = canvas.height;
+    if (!W || !H) return;
+    const fovRad = fov * Math.PI / 180;
+    const halfFov = fovRad / 2, halfFovV = halfFov / (W / H);
+    const pad = 22;
+    const overrides = current.connectionOverrides || {};
+    const connAngles = [];
+    (current.connections || []).forEach(targetId => {
+      const target = nodes.find(n => n.id === targetId);
+      if (!target) return;
+      const ov = overrides[targetId];
+      let worldYaw;
+      if (ov && ov.customYaw !== null && ov.customYaw !== undefined) {
+        worldYaw = ov.customYaw;
+      } else if (current.mapX !== null && target.mapX !== null) {
+        worldYaw = Math.atan2(target.mapX - current.mapX, -(target.mapY - current.mapY));
+      } else {
+        return;
+      }
+      const worldPitch = (ov && ov.customPitch !== null && ov.customPitch !== undefined) ? ov.customPitch : -0.12;
+      connAngles.push({ targetId, worldYaw, worldPitch });
+    });
+    while (container.children.length > connAngles.length) container.removeChild(container.lastChild);
+    while (container.children.length < connAngles.length) {
+      const d = document.createElement('div');
+      d.className = 'helper-arrow';
+      d.innerHTML = FV.hotspots._helperArrowSvg;
+      container.appendChild(d);
+    }
+    connAngles.forEach((c, i) => {
+      const el = container.children[i];
+      const relYaw  = c.worldYaw - yaw;
+      const normYaw = ((relYaw + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+      const relPitch = c.worldPitch - pitch;
+      const visible  = Math.abs(normYaw) < halfFov * 0.88 && Math.abs(relPitch) < halfFovV;
+      if (visible) { el.style.display = 'none'; return; }
+      el.style.display = 'block';
+      const rawX = W / 2 + (normYaw / halfFov) * W / 2;
+      const rawY = H / 2 - (relPitch / halfFovV) * H / 2;
+      const cx = W / 2, cy = H / 2;
+      const dx = rawX - cx, dy = rawY - cy;
+      const angle = Math.atan2(dy, dx);
+      const hw = W / 2 - pad, hh = H / 2 - pad;
+      const scaleX = hw / Math.abs(dx || 1), scaleY = hh / Math.abs(dy || 1);
+      const scale = Math.min(scaleX, scaleY, 1);
+      const edgeX = cx + dx * scale;
+      const edgeY = cy + dy * scale;
+      const sz = 28;
+      const ex = Math.round(edgeX - sz / 2);
+      const ey = Math.round(edgeY - sz / 2);
+      const rot = angle * (180 / Math.PI);
+      if (el._haX !== ex) { el.style.left = ex + 'px'; el._haX = ex; }
+      if (el._haY !== ey) { el.style.top  = ey + 'px'; el._haY = ey; }
+      if (el._haR !== rot) { el.style.transform = `rotate(${rot}deg)`; el._haR = rot; }
+    });
+  },
+
+  toggleEditMode() {
+    if (!img) return;
+    FV.hotspots.editMode = !FV.hotspots.editMode;
+    canvas.classList.toggle('hotspot-edit-mode', FV.hotspots.editMode);
+    document.getElementById('btnHotspotEdit').classList.toggle('hotspot-edit-active', FV.hotspots.editMode);
+  },
+
+  canvasClickToYawPitch(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const px = clientX - rect.left, py = clientY - rect.top;
+    const W = rect.width, H = rect.height;
+    const halfFovH = (fov * Math.PI / 180) / 2;
+    const halfFovV = halfFovH / (W / H);
+    return {
+      yaw:   yaw   + (px / W - 0.5) * 2 * halfFovH,
+      pitch: Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, pitch - (py / H - 0.5) * 2 * halfFovV))
+    };
+  },
+
+  openAddModal(yawVal, pitchVal) {
+    FV.hotspots.editingId = null;
+    FV.hotspots.pendingYaw = yawVal; FV.hotspots.pendingPitch = pitchVal;
+    document.getElementById('hotspotLabel').value = '';
+    document.getElementById('hotspotContent').value = '';
+    document.getElementById('hotspotType').value = 'info';
+    document.getElementById('hotspotUrl').value = '';
+    document.getElementById('hotspotFileLabel').textContent = 'Click to upload image or PDF';
+    FV.hotspots.pendingFileData = null;
+    document.getElementById('hsQuizQText').value = '';
+    [0,1,2,3].forEach(i => { document.getElementById('hsQuizOpt' + i).value = ''; });
+    document.getElementById('hsQuizCorrectSelect').value = '0';
+    document.getElementById('hsQuizExplText').value = '';
+    FV.hotspots.selectIcon('info');
+    document.getElementById('hotspotColor').value = HOTSPOT_ICON_DEFAULTS.info;
+    document.getElementById('addHotspotSub').textContent =
+      `Yaw: ${Math.round(yawVal * 180 / Math.PI)}°  Pitch: ${Math.round(pitchVal * 180 / Math.PI)}°`;
+    document.querySelector('#modalAddHotspot .modal-title').textContent = 'Add Hotspot';
+    document.getElementById('confirmHotspotBtn').textContent = 'Add Hotspot';
+    const sel = document.getElementById('hotspotLinkTarget');
+    sel.innerHTML = '';
+    currentNodes().forEach((n, i) => {
+      if (i === currentNodeIdx) return;
+      const o = document.createElement('option');
+      o.value = n.id; o.textContent = n.id + ': ' + n.name;
+      sel.appendChild(o);
+    });
+    FV.hotspots.updateTypeFields();
+    FV.modals.open('modalAddHotspot');
+    setTimeout(() => document.getElementById('hotspotLabel').focus(), 100);
+  },
+
+  updateTypeFields() {
+    const type = document.getElementById('hotspotType').value;
+    document.getElementById('hotspotContentField').style.display = type === 'info'  ? '' : 'none';
+    document.getElementById('hotspotLinkField').style.display    = type === 'link'  ? '' : 'none';
+    document.getElementById('hotspotUrlField').style.display     = type === 'url'   ? '' : 'none';
+    document.getElementById('hotspotFileField').style.display    = (type === 'image' || type === 'file') ? '' : 'none';
+    document.getElementById('hotspotQuizField').style.display    = type === 'quiz'  ? '' : 'none';
+    document.getElementById('hotspotIconField').style.display    = (type === 'link' || type === 'quiz') ? 'none' : '';
+    const typeIconMap = { url: 'external', image: 'image', file: 'document', quiz: 'quiz' };
+    if (typeIconMap[type]) FV.hotspots.selectIcon(typeIconMap[type]);
+  },
+
+  selectIcon(icon) {
+    document.querySelectorAll('.hs-icon-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.icon === icon));
+    document.getElementById('hotspotColor').value = HOTSPOT_ICON_DEFAULTS[icon] || '#00c8ff';
+  },
+
+  resetColor() {
+    const activeBtn = document.querySelector('.hs-icon-btn.active');
+    const icon = activeBtn ? activeBtn.dataset.icon : 'info';
+    document.getElementById('hotspotColor').value = HOTSPOT_ICON_DEFAULTS[icon] || '#00c8ff';
+  },
+
+  resetNavArrowColor() {
+    document.getElementById('navArrowColorInput').value = '#f0a500';
+  },
+
+  confirmAdd() {
+    const label = document.getElementById('hotspotLabel').value.trim();
+    if (!label) { document.getElementById('hotspotLabel').focus(); return; }
+    const type = document.getElementById('hotspotType').value;
+    let content = '', filename = null;
+    if (type === 'info')       content = document.getElementById('hotspotContent').value.trim();
+    else if (type === 'link')  content = document.getElementById('hotspotLinkTarget').value;
+    else if (type === 'url')   content = document.getElementById('hotspotUrl').value.trim();
+    else if (type === 'image' || type === 'file') {
+      if (FV.hotspots.pendingFileData) { content = FV.hotspots.pendingFileData.dataUrl; filename = FV.hotspots.pendingFileData.filename; }
+      else if (FV.hotspots.editingId) {
+        const existingHs = (currentNodes()[currentNodeIdx]?.hotspots || []).find(h => h.id === FV.hotspots.editingId);
+        if (existingHs) { content = existingHs.content; filename = existingHs.filename || null; }
+      }
+    }
+    let hsQuiz = null;
+    if (type === 'quiz') {
+      const qText = document.getElementById('hsQuizQText').value.trim();
+      const opts = [0,1,2,3].map(i => document.getElementById('hsQuizOpt' + i).value.trim());
+      const correctIdx = parseInt(document.getElementById('hsQuizCorrectSelect').value) || 0;
+      const explanation = document.getElementById('hsQuizExplText').value.trim();
+      if (!qText || opts.some(o => !o)) { alert('Please fill in the question and all four options.'); return; }
+      hsQuiz = { question: qText, options: opts, correctIndex: correctIdx, explanation };
+    }
+    if ((type === 'url') && !content) { document.getElementById('hotspotUrl').focus(); return; }
+    if ((type === 'image' || type === 'file') && !content) { alert('Please upload a file.'); return; }
+    const activeIconBtn = document.querySelector('.hs-icon-btn.active');
+    const icon = activeIconBtn ? activeIconBtn.dataset.icon : (type === 'link' ? 'link' : type === 'quiz' ? 'quiz' : 'info');
+    const pickedColor = document.getElementById('hotspotColor').value;
+    const defaultColor = HOTSPOT_ICON_DEFAULTS[icon] || '#00c8ff';
+    const color = pickedColor.toLowerCase() !== defaultColor.toLowerCase() ? pickedColor : null;
+    const node = currentNodes()[currentNodeIdx];
+    if (!node) return;
+    node.hotspots = node.hotspots || [];
+    if (FV.hotspots.editingId) {
+      const hs = node.hotspots.find(h => h.id === FV.hotspots.editingId);
+      if (hs) { hs.type = type; hs.icon = icon; hs.color = color; hs.label = label; hs.content = content; hs.filename = filename; hs.quiz = hsQuiz; }
+      FV.hotspots.editingId = null;
+      FV.modals.close('modalAddHotspot');
+      FV.hotspots.build(currentNodeIdx);
+      saveRoutes();
+      FV.hotspots.openManageModal();
+    } else {
+      node.hotspots.push({ id: uid('HS'), type, icon, color, filename, yaw: FV.hotspots.pendingYaw, pitch: FV.hotspots.pendingPitch, label, content, quiz: hsQuiz });
+      FV.hotspots.pendingFileData = null;
+      FV.modals.close('modalAddHotspot');
+      FV.hotspots.build(currentNodeIdx);
+      saveRoutes();
+    }
+  },
+
+  cancelModal() {
+    const wasEditing = !!FV.hotspots.editingId;
+    FV.hotspots.editingId = null;
+    FV.modals.close('modalAddHotspot');
+    if (wasEditing) FV.hotspots.openManageModal();
+  },
+
+  delete(nodeIdx, hotspotId) {
+    const node = currentNodes()[nodeIdx]; if (!node) return;
+    node.hotspots = (node.hotspots || []).filter(h => h.id !== hotspotId);
+    FV.hotspots.build(currentNodeIdx);
+    saveRoutes();
+  },
+
+  openManageModal() {
+    const node = currentNodes()[currentNodeIdx];
+    document.getElementById('manageHotspotNodeName').textContent = node ? node.name : '—';
+    FV.hotspots.buildManageList();
+    FV.modals.open('modalManageHotspots');
+  },
+
+  buildManageList() {
+    const node = currentNodes()[currentNodeIdx];
+    const list = document.getElementById('hotspotManageList');
+    const hotspots = (node && node.hotspots) ? node.hotspots : [];
+    if (!hotspots.length) {
+      list.innerHTML = '<div style="padding:20px 0;font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:1px;text-align:center;">No hotspots on this node yet.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    hotspots.forEach(hs => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);';
+      const resolvedIcon = hs.icon || (hs.type === 'link' ? 'link' : 'info');
+      const listPinColor = hs.color || HOTSPOT_ICON_DEFAULTS[resolvedIcon] || '#00c8ff';
+      const listIconSvg = HOTSPOT_ICONS[resolvedIcon] || HOTSPOT_ICONS.info;
+      const listIcon = listIconSvg.replace('<svg ', `<svg width="14" height="14" fill="${listPinColor}" style="flex-shrink:0" `);
+      const badgeColor = hs.type === 'info' ? 'rgba(0,200,255,0.12)' : hs.type === 'quiz' ? 'rgba(224,64,251,0.12)' : 'rgba(0,230,118,0.12)';
+      const badgeText = hs.type === 'info' ? 'var(--accent2)' : hs.type === 'quiz' ? '#e040fb' : 'var(--success)';
+      const previewText = hs.type === 'info'   ? (hs.content || '—')
+        : hs.type === 'link'   ? ('→ ' + (currentNodes().find(n => n.id === hs.content) || {name: hs.content}).name)
+        : hs.type === 'url'    ? (hs.content || '—')
+        : hs.type === 'image'  ? ('🖼 ' + (hs.filename || 'Image'))
+        : hs.type === 'file'   ? ('📄 ' + (hs.filename || 'Document'))
+        : hs.type === 'quiz'   ? ('❓ ' + (hs.quiz ? hs.quiz.question : '—'))
+        : '—';
+      row.innerHTML = `
+        ${listIcon}
+        <div style="flex:1;min-width:0;">
+          <div style="font-family:var(--cond);font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(hs.label)}</div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(previewText)}</div>
+        </div>
+        <span style="font-family:var(--mono);font-size:8px;letter-spacing:1px;padding:2px 5px;border-radius:2px;background:${badgeColor};color:${badgeText};flex-shrink:0;">${hs.type.toUpperCase()}</span>
+        <button class="loc-action-btn" title="Edit" data-hsid="${hs.id}" data-action="edit">
+          <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+        </button>
+        <button class="loc-action-btn" title="Reposition" data-hsid="${hs.id}" data-action="reposition">
+          <svg viewBox="0 0 24 24"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06z"/></svg>
+        </button>
+        <button class="loc-action-btn danger" title="Delete" data-hsid="${hs.id}" data-action="delete">
+          <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+        </button>`;
+      list.appendChild(row);
+    });
+    list.onclick = e => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const { hsid, action } = btn.dataset;
+      if (action === 'edit') FV.hotspots.openEditModal(hsid);
+      else if (action === 'reposition') FV.hotspots.startReposition(hsid);
+      else if (action === 'delete') { if (confirm('Delete this hotspot?')) { FV.hotspots.delete(currentNodeIdx, hsid); FV.hotspots.buildManageList(); } }
+    };
+  },
+
+  openEditModal(hsId) {
+    const node = currentNodes()[currentNodeIdx];
+    if (!node) return;
+    const hs = (node.hotspots || []).find(h => h.id === hsId);
+    if (!hs) return;
+    FV.hotspots.editingId = hsId;
+    FV.hotspots.pendingYaw = hs.yaw; FV.hotspots.pendingPitch = hs.pitch;
+    document.getElementById('hotspotLabel').value = hs.label;
+    document.getElementById('hotspotContent').value = hs.type === 'info' ? (hs.content || '') : '';
+    document.getElementById('hotspotType').value = hs.type;
+    document.getElementById('hotspotUrl').value = hs.type === 'url' ? (hs.content || '') : '';
+    if (hs.type === 'image' || hs.type === 'file') {
+      FV.hotspots.pendingFileData = hs.content ? { dataUrl: hs.content, filename: hs.filename || 'file' } : null;
+      document.getElementById('hotspotFileLabel').textContent = hs.filename || (hs.content ? 'File attached — click to replace' : 'Click to upload image or PDF');
+    } else {
+      FV.hotspots.pendingFileData = null;
+      document.getElementById('hotspotFileLabel').textContent = 'Click to upload image or PDF';
+    }
+    if (hs.type === 'quiz' && hs.quiz) {
+      document.getElementById('hsQuizQText').value = hs.quiz.question || '';
+      [0,1,2,3].forEach(i => { document.getElementById('hsQuizOpt' + i).value = hs.quiz.options[i] || ''; });
+      document.getElementById('hsQuizCorrectSelect').value = hs.quiz.correctIndex ?? 0;
+      document.getElementById('hsQuizExplText').value = hs.quiz.explanation || '';
+    } else {
+      document.getElementById('hsQuizQText').value = '';
+      [0,1,2,3].forEach(i => { document.getElementById('hsQuizOpt' + i).value = ''; });
+      document.getElementById('hsQuizCorrectSelect').value = '0';
+      document.getElementById('hsQuizExplText').value = '';
+    }
+    const editIcon = hs.icon || (hs.type === 'link' ? 'link' : hs.type === 'url' ? 'external' : hs.type === 'image' ? 'image' : hs.type === 'file' ? 'document' : hs.type === 'quiz' ? 'quiz' : 'info');
+    FV.hotspots.selectIcon(editIcon);
+    document.getElementById('hotspotColor').value = hs.color || HOTSPOT_ICON_DEFAULTS[editIcon] || '#00c8ff';
+    const sel = document.getElementById('hotspotLinkTarget');
+    sel.innerHTML = '';
+    currentNodes().forEach((n, i) => {
+      if (i === currentNodeIdx) return;
+      const o = document.createElement('option');
+      o.value = n.id; o.textContent = n.id + ': ' + n.name;
+      if (n.id === hs.content) o.selected = true;
+      sel.appendChild(o);
+    });
+    FV.hotspots.updateTypeFields();
+    document.getElementById('addHotspotSub').textContent = `Editing: ${hs.label}`;
+    document.querySelector('#modalAddHotspot .modal-title').textContent = 'Edit Hotspot';
+    document.getElementById('confirmHotspotBtn').textContent = 'Save Changes';
+    FV.modals.close('modalManageHotspots');
+    FV.modals.open('modalAddHotspot');
+    setTimeout(() => document.getElementById('hotspotLabel').focus(), 100);
+  },
+
+  startReposition(hsId) {
+    if (!img) return;
+    if (FV.hotspots.repositioningId) FV.hotspots.repositioningId = null;
+    FV.hotspots.repositioningId = hsId;
+    FV.modals.close('modalManageHotspots');
+    FV.hotspots.editMode = true;
+    canvas.classList.add('hotspot-edit-mode');
+    document.getElementById('btnHotspotEdit').classList.add('hotspot-edit-active');
+  },
+
+  showInfo(hs) {
+    document.getElementById('hotspotInfoTitle').textContent = hs.label;
+    document.getElementById('hotspotInfoText').textContent  = hs.content;
+    document.getElementById('hotspotInfoPopup').style.display = 'block';
+  },
+
+  showImage(hs) {
+    const src = hs.content || '';
+    if (src && !isSafeImageSrc(src)) return;
+    document.getElementById('lightboxImg').src = src;
+    document.getElementById('lightboxImg').alt = hs.label || 'Hotspot image';
+    document.getElementById('lightboxTitle').textContent = hs.label + (hs.filename ? ' — ' + hs.filename : '');
+    document.getElementById('hotspotLightbox').classList.add('open');
+  },
+
+  closeLightbox() {
+    document.getElementById('hotspotLightbox').classList.remove('open');
+    document.getElementById('lightboxImg').src = '';
+  }
+};
+// Backward-compat shims
+function buildHotspots(index)       { FV.hotspots.build(index); }
+function updateHotspotPositions()   { FV.hotspots.updatePositions(); }
+function updateHelperArrows()       { FV.hotspots.updateHelperArrows(); }
+function toggleHotspotEditMode()    { FV.hotspots.toggleEditMode(); }
+function openManageHotspotsModal()  { FV.hotspots.openManageModal(); }
+function closeLightbox()            { FV.hotspots.closeLightbox(); }
+function resetNavArrowColor()       { FV.hotspots.resetNavArrowColor(); }
+function selectHotspotIcon(icon)    { FV.hotspots.selectIcon(icon); }
+function resetHotspotColor()        { FV.hotspots.resetColor(); }
+function cancelHotspotModal()       { FV.hotspots.cancelModal(); }
+function confirmAddHotspot()        { FV.hotspots.confirmAdd(); }
+function deleteHotspot(idx, id)     { FV.hotspots.delete(idx, id); }
+function openAddHotspotModal(y, p)  { FV.hotspots.openAddModal(y, p); }
+function canvasClickToYawPitch(x,y) { return FV.hotspots.canvasClickToYawPitch(x, y); }
 
 // ══════════════════════════════════════════════════
 // DEMO DATA
@@ -3852,7 +4402,7 @@ document.getElementById('hotspotFileInput').addEventListener('change', function(
   }
   const reader = new FileReader();
   reader.onload = ev => {
-    pendingHotspotFileData = { dataUrl: ev.target.result, filename: file.name };
+    FV.hotspots.pendingFileData = { dataUrl: ev.target.result, filename: file.name };
     document.getElementById('hotspotFileLabel').textContent = file.name;
   };
   reader.readAsDataURL(file);
@@ -4517,280 +5067,8 @@ document.addEventListener('mousedown', e => {
 });
 
 // ══════════════════════════════════════════════════
-// CUSTOM HOTSPOT FUNCTIONS
+// CUSTOM HOTSPOT FUNCTIONS — moved to FV.hotspots module; shims defined there
 // ══════════════════════════════════════════════════
-function toggleHotspotEditMode() {
-  if (!img) return;
-  hotspotEditMode = !hotspotEditMode;
-  canvas.classList.toggle('hotspot-edit-mode', hotspotEditMode);
-  document.getElementById('btnHotspotEdit').classList.toggle('hotspot-edit-active', hotspotEditMode);
-}
-function canvasClickToYawPitch(clientX, clientY) {
-  const rect = canvas.getBoundingClientRect();
-  const px = clientX - rect.left, py = clientY - rect.top;
-  const W = rect.width, H = rect.height;
-  const halfFovH = (fov * Math.PI / 180) / 2;
-  const halfFovV = halfFovH / (W / H);
-  return {
-    yaw:   yaw   + (px / W - 0.5) * 2 * halfFovH,
-    pitch: Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, pitch - (py / H - 0.5) * 2 * halfFovV))
-  };
-}
-function openAddHotspotModal(yawVal, pitchVal) {
-  editingHotspotId = null;
-  pendingHotspotYaw = yawVal; pendingHotspotPitch = pitchVal;
-  document.getElementById('hotspotLabel').value = '';
-  document.getElementById('hotspotContent').value = '';
-  document.getElementById('hotspotType').value = 'info';
-  document.getElementById('hotspotUrl').value = '';
-  document.getElementById('hotspotFileLabel').textContent = 'Click to upload image or PDF';
-  pendingHotspotFileData = null;
-  document.getElementById('hsQuizQText').value = '';
-  [0,1,2,3].forEach(i => { document.getElementById('hsQuizOpt' + i).value = ''; });
-  document.getElementById('hsQuizCorrectSelect').value = '0';
-  document.getElementById('hsQuizExplText').value = '';
-  selectHotspotIcon('info');
-  document.getElementById('hotspotColor').value = HOTSPOT_ICON_DEFAULTS.info;
-  document.getElementById('addHotspotSub').textContent =
-    `Yaw: ${Math.round(yawVal * 180 / Math.PI)}°  Pitch: ${Math.round(pitchVal * 180 / Math.PI)}°`;
-  document.querySelector('#modalAddHotspot .modal-title').textContent = 'Add Hotspot';
-  document.getElementById('confirmHotspotBtn').textContent = 'Add Hotspot';
-  // Populate link target dropdown
-  const sel = document.getElementById('hotspotLinkTarget');
-  sel.innerHTML = '';
-  currentNodes().forEach((n, i) => {
-    if (i === currentNodeIdx) return;
-    const o = document.createElement('option');
-    o.value = n.id; o.textContent = n.id + ': ' + n.name;
-    sel.appendChild(o);
-  });
-  updateHotspotTypeFields();
-  openModal('modalAddHotspot');
-  setTimeout(() => document.getElementById('hotspotLabel').focus(), 100);
-}
-function updateHotspotTypeFields() {
-  const type = document.getElementById('hotspotType').value;
-  document.getElementById('hotspotContentField').style.display = type === 'info'  ? '' : 'none';
-  document.getElementById('hotspotLinkField').style.display    = type === 'link'  ? '' : 'none';
-  document.getElementById('hotspotUrlField').style.display     = type === 'url'   ? '' : 'none';
-  document.getElementById('hotspotFileField').style.display    = (type === 'image' || type === 'file') ? '' : 'none';
-  document.getElementById('hotspotQuizField').style.display    = type === 'quiz'  ? '' : 'none';
-  document.getElementById('hotspotIconField').style.display    = (type === 'link' || type === 'quiz') ? 'none' : '';
-  // Auto-select the icon that matches the type when switching types
-  const typeIconMap = { url: 'external', image: 'image', file: 'document', quiz: 'quiz' };
-  if (typeIconMap[type]) selectHotspotIcon(typeIconMap[type]);
-}
-function selectHotspotIcon(icon) {
-  document.querySelectorAll('.hs-icon-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.icon === icon));
-  document.getElementById('hotspotColor').value = HOTSPOT_ICON_DEFAULTS[icon] || '#00c8ff';
-}
-function resetHotspotColor() {
-  const activeBtn = document.querySelector('.hs-icon-btn.active');
-  const icon = activeBtn ? activeBtn.dataset.icon : 'info';
-  document.getElementById('hotspotColor').value = HOTSPOT_ICON_DEFAULTS[icon] || '#00c8ff';
-}
-function resetNavArrowColor() {
-  document.getElementById('navArrowColorInput').value = '#f0a500';
-}
-function confirmAddHotspot() {
-  const label = document.getElementById('hotspotLabel').value.trim();
-  if (!label) { document.getElementById('hotspotLabel').focus(); return; }
-  const type = document.getElementById('hotspotType').value;
-  let content = '', filename = null;
-  if (type === 'info')       content = document.getElementById('hotspotContent').value.trim();
-  else if (type === 'link')  content = document.getElementById('hotspotLinkTarget').value;
-  else if (type === 'url')   content = document.getElementById('hotspotUrl').value.trim();
-  else if (type === 'image' || type === 'file') {
-    if (pendingHotspotFileData) { content = pendingHotspotFileData.dataUrl; filename = pendingHotspotFileData.filename; }
-    else if (editingHotspotId) {
-      // Keep existing file if no new one was uploaded
-      const existingHs = (currentNodes()[currentNodeIdx]?.hotspots || []).find(h => h.id === editingHotspotId);
-      if (existingHs) { content = existingHs.content; filename = existingHs.filename || null; }
-    }
-  }
-  let hsQuiz = null;
-  if (type === 'quiz') {
-    const qText = document.getElementById('hsQuizQText').value.trim();
-    const opts = [0,1,2,3].map(i => document.getElementById('hsQuizOpt' + i).value.trim());
-    const correctIdx = parseInt(document.getElementById('hsQuizCorrectSelect').value) || 0;
-    const explanation = document.getElementById('hsQuizExplText').value.trim();
-    if (!qText || opts.some(o => !o)) { alert('Please fill in the question and all four options.'); return; }
-    hsQuiz = { question: qText, options: opts, correctIndex: correctIdx, explanation };
-  }
-  if ((type === 'url') && !content) { document.getElementById('hotspotUrl').focus(); return; }
-  if ((type === 'image' || type === 'file') && !content) { alert('Please upload a file.'); return; }
-  const activeIconBtn = document.querySelector('.hs-icon-btn.active');
-  const icon = activeIconBtn ? activeIconBtn.dataset.icon : (type === 'link' ? 'link' : type === 'quiz' ? 'quiz' : 'info');
-  const pickedColor = document.getElementById('hotspotColor').value;
-  const defaultColor = HOTSPOT_ICON_DEFAULTS[icon] || '#00c8ff';
-  const color = pickedColor.toLowerCase() !== defaultColor.toLowerCase() ? pickedColor : null;
-  const node = currentNodes()[currentNodeIdx];
-  if (!node) return;
-  node.hotspots = node.hotspots || [];
-  if (editingHotspotId) {
-    const hs = node.hotspots.find(h => h.id === editingHotspotId);
-    if (hs) { hs.type = type; hs.icon = icon; hs.color = color; hs.label = label; hs.content = content; hs.filename = filename; hs.quiz = hsQuiz; }
-    editingHotspotId = null;
-    closeModal('modalAddHotspot');
-    buildHotspots(currentNodeIdx);
-    saveRoutes();
-    openManageHotspotsModal();
-  } else {
-    node.hotspots.push({ id: uid('HS'), type, icon, color, filename, yaw: pendingHotspotYaw, pitch: pendingHotspotPitch, label, content, quiz: hsQuiz });
-    pendingHotspotFileData = null;
-    closeModal('modalAddHotspot');
-    buildHotspots(currentNodeIdx);
-    saveRoutes();
-  }
-}
-function cancelHotspotModal() {
-  const wasEditing = !!editingHotspotId;
-  editingHotspotId = null;
-  closeModal('modalAddHotspot');
-  if (wasEditing) openManageHotspotsModal();
-}
-function deleteHotspot(nodeIdx, hotspotId) {
-  const node = currentNodes()[nodeIdx]; if (!node) return;
-  node.hotspots = (node.hotspots || []).filter(h => h.id !== hotspotId);
-  buildHotspots(currentNodeIdx);
-  saveRoutes();
-}
-function openManageHotspotsModal() {
-  const node = currentNodes()[currentNodeIdx];
-  document.getElementById('manageHotspotNodeName').textContent = node ? node.name : '—';
-  buildHotspotManageList();
-  openModal('modalManageHotspots');
-}
-function buildHotspotManageList() {
-  const node = currentNodes()[currentNodeIdx];
-  const list = document.getElementById('hotspotManageList');
-  const hotspots = (node && node.hotspots) ? node.hotspots : [];
-  if (!hotspots.length) {
-    list.innerHTML = '<div style="padding:20px 0;font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:1px;text-align:center;">No hotspots on this node yet.</div>';
-    return;
-  }
-  list.innerHTML = '';
-  hotspots.forEach(hs => {
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);';
-    const resolvedIcon = hs.icon || (hs.type === 'link' ? 'link' : 'info');
-    const listPinColor = hs.color || HOTSPOT_ICON_DEFAULTS[resolvedIcon] || '#00c8ff';
-    const listIconSvg = HOTSPOT_ICONS[resolvedIcon] || HOTSPOT_ICONS.info;
-    const listIcon = listIconSvg.replace('<svg ', `<svg width="14" height="14" fill="${listPinColor}" style="flex-shrink:0" `);
-    const badgeColor = hs.type === 'info' ? 'rgba(0,200,255,0.12)' : hs.type === 'quiz' ? 'rgba(224,64,251,0.12)' : 'rgba(0,230,118,0.12)';
-    const badgeText = hs.type === 'info' ? 'var(--accent2)' : hs.type === 'quiz' ? '#e040fb' : 'var(--success)';
-    const previewText = hs.type === 'info'   ? (hs.content || '—')
-      : hs.type === 'link'   ? ('→ ' + (currentNodes().find(n => n.id === hs.content) || {name: hs.content}).name)
-      : hs.type === 'url'    ? (hs.content || '—')
-      : hs.type === 'image'  ? ('🖼 ' + (hs.filename || 'Image'))
-      : hs.type === 'file'   ? ('📄 ' + (hs.filename || 'Document'))
-      : hs.type === 'quiz'   ? ('❓ ' + (hs.quiz ? hs.quiz.question : '—'))
-      : '—';
-    row.innerHTML = `
-      ${listIcon}
-      <div style="flex:1;min-width:0;">
-        <div style="font-family:var(--cond);font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(hs.label)}</div>
-        <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(previewText)}</div>
-      </div>
-      <span style="font-family:var(--mono);font-size:8px;letter-spacing:1px;padding:2px 5px;border-radius:2px;background:${badgeColor};color:${badgeText};flex-shrink:0;">${hs.type.toUpperCase()}</span>
-      <button class="loc-action-btn" title="Edit" data-hsid="${hs.id}" data-action="edit">
-        <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-      </button>
-      <button class="loc-action-btn" title="Reposition" data-hsid="${hs.id}" data-action="reposition">
-        <svg viewBox="0 0 24 24"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06z"/></svg>
-      </button>
-      <button class="loc-action-btn danger" title="Delete" data-hsid="${hs.id}" data-action="delete">
-        <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-      </button>`;
-    list.appendChild(row);
-  });
-  // single delegated listener
-  list.onclick = e => {
-    const btn = e.target.closest('[data-action]');
-    if (!btn) return;
-    const { hsid, action } = btn.dataset;
-    if (action === 'edit') openEditHotspotModal(hsid);
-    else if (action === 'reposition') startRepositionHotspot(hsid);
-    else if (action === 'delete') { if (confirm('Delete this hotspot?')) { deleteHotspot(currentNodeIdx, hsid); buildHotspotManageList(); } }
-  };
-}
-function openEditHotspotModal(hsId) {
-  const node = currentNodes()[currentNodeIdx];
-  if (!node) return;
-  const hs = (node.hotspots || []).find(h => h.id === hsId);
-  if (!hs) return;
-  editingHotspotId = hsId;
-  pendingHotspotYaw = hs.yaw; pendingHotspotPitch = hs.pitch;
-  document.getElementById('hotspotLabel').value = hs.label;
-  document.getElementById('hotspotContent').value = hs.type === 'info' ? (hs.content || '') : '';
-  document.getElementById('hotspotType').value = hs.type;
-  document.getElementById('hotspotUrl').value = hs.type === 'url' ? (hs.content || '') : '';
-  if (hs.type === 'image' || hs.type === 'file') {
-    pendingHotspotFileData = hs.content ? { dataUrl: hs.content, filename: hs.filename || 'file' } : null;
-    document.getElementById('hotspotFileLabel').textContent = hs.filename || (hs.content ? 'File attached — click to replace' : 'Click to upload image or PDF');
-  } else {
-    pendingHotspotFileData = null;
-    document.getElementById('hotspotFileLabel').textContent = 'Click to upload image or PDF';
-  }
-  // Populate quiz fields if editing a quiz hotspot
-  if (hs.type === 'quiz' && hs.quiz) {
-    document.getElementById('hsQuizQText').value = hs.quiz.question || '';
-    [0,1,2,3].forEach(i => { document.getElementById('hsQuizOpt' + i).value = hs.quiz.options[i] || ''; });
-    document.getElementById('hsQuizCorrectSelect').value = hs.quiz.correctIndex ?? 0;
-    document.getElementById('hsQuizExplText').value = hs.quiz.explanation || '';
-  } else {
-    document.getElementById('hsQuizQText').value = '';
-    [0,1,2,3].forEach(i => { document.getElementById('hsQuizOpt' + i).value = ''; });
-    document.getElementById('hsQuizCorrectSelect').value = '0';
-    document.getElementById('hsQuizExplText').value = '';
-  }
-  const editIcon = hs.icon || (hs.type === 'link' ? 'link' : hs.type === 'url' ? 'external' : hs.type === 'image' ? 'image' : hs.type === 'file' ? 'document' : hs.type === 'quiz' ? 'quiz' : 'info');
-  selectHotspotIcon(editIcon);
-  document.getElementById('hotspotColor').value = hs.color || HOTSPOT_ICON_DEFAULTS[editIcon] || '#00c8ff';
-  // populate link target select and pre-select current target
-  const sel = document.getElementById('hotspotLinkTarget');
-  sel.innerHTML = '';
-  currentNodes().forEach((n, i) => {
-    if (i === currentNodeIdx) return;
-    const o = document.createElement('option');
-    o.value = n.id; o.textContent = n.id + ': ' + n.name;
-    if (n.id === hs.content) o.selected = true;
-    sel.appendChild(o);
-  });
-  updateHotspotTypeFields();
-  document.getElementById('addHotspotSub').textContent = `Editing: ${hs.label}`;
-  document.querySelector('#modalAddHotspot .modal-title').textContent = 'Edit Hotspot';
-  document.getElementById('confirmHotspotBtn').textContent = 'Save Changes';
-  closeModal('modalManageHotspots');
-  openModal('modalAddHotspot');
-  setTimeout(() => document.getElementById('hotspotLabel').focus(), 100);
-}
-function startRepositionHotspot(hsId) {
-  if (!img) return;
-  if (repositioningHotspotId) repositioningHotspotId = null; // cancel any in-progress reposition
-  repositioningHotspotId = hsId;
-  closeModal('modalManageHotspots');
-  hotspotEditMode = true;
-  canvas.classList.add('hotspot-edit-mode');
-  document.getElementById('btnHotspotEdit').classList.add('hotspot-edit-active');
-}
-function showHotspotInfo(hs) {
-  document.getElementById('hotspotInfoTitle').textContent = hs.label;
-  document.getElementById('hotspotInfoText').textContent  = hs.content;
-  document.getElementById('hotspotInfoPopup').style.display = 'block';
-}
-function showHotspotImage(hs) {
-  const src = hs.content || '';
-  if (src && !isSafeImageSrc(src)) return;
-  document.getElementById('lightboxImg').src = src;
-  document.getElementById('lightboxImg').alt = hs.label || 'Hotspot image';
-  document.getElementById('lightboxTitle').textContent = hs.label + (hs.filename ? ' — ' + hs.filename : '');
-  document.getElementById('hotspotLightbox').classList.add('open');
-}
-function closeLightbox() {
-  document.getElementById('hotspotLightbox').classList.remove('open');
-  document.getElementById('lightboxImg').src = '';
-}
 
 // ══════════════════════════════════════════════════
 // WEBGL RENDERER INIT
