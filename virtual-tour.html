@@ -1250,8 +1250,7 @@ let yaw = 0, pitch = 0, fov = 75;
 let isDragging = false, lastX = 0, lastY = 0;
 let mouseDownX = 0, mouseDownY = 0;
 let img = null, renderPending = false;
-let pendingNodeImage = null;
-let renameTargetIdx  = -1;
+// Node editing state — now managed by FV.nodes module (see below)
 
 // Map editor state
 let mapTool = 'place';            // 'place' | 'move' | 'connect'
@@ -1268,12 +1267,7 @@ const MAP_UNDO_LIMIT = 50;
 // Crossfade state
 let isFading = false, fadeTimeout = null;
 
-// Custom hotspot state
-let hotspotEditMode = false;
-let pendingHotspotYaw = 0, pendingHotspotPitch = 0;
-let editingHotspotId = null;       // null = new, string = editing existing
-let repositioningHotspotId = null; // null = normal, string = reposition in progress
-let pendingHotspotFileData = null; // { dataUrl, filename } for image/file hotspots
+// Custom hotspot state — now managed by FV.hotspots module (see below)
 
 // Kiosk mode — now managed by FV.kiosk module (see below)
 
@@ -1343,8 +1337,8 @@ function uid(prefix) { return prefix + (typeof crypto !== 'undefined' && crypto.
 // ══════════════════════════════════════════════════
 // SIDEBAR TOGGLE
 // ══════════════════════════════════════════════════
-let sidebarOpen = true;
-document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);
+// Sidebar state — now managed by FV.sidebar module (see below)
+document.getElementById('sidebarToggle').addEventListener('click', () => FV.sidebar.toggle());
 function toggleSidebar() {
   sidebarOpen = !sidebarOpen;
   document.getElementById('sidebar').classList.toggle('collapsed', !sidebarOpen);
@@ -1458,7 +1452,7 @@ window.addEventListener('keydown', e => {
 // ══════════════════════════════════════════════════
 // ROUTE MANAGEMENT
 // ══════════════════════════════════════════════════
-document.getElementById('btnNewRoute').addEventListener('click', openNewRouteModal);
+document.getElementById('btnNewRoute').addEventListener('click', () => FV.routes.openNewRouteModal());
 function openNewRouteModal() {
   document.getElementById('newRouteName').value = '';
   document.getElementById('newRouteDesc').value  = '';
@@ -1542,7 +1536,7 @@ function rebuildRouteSelect() {
 }
 document.getElementById('routeSelect').addEventListener('change', function() {
   const idx = parseInt(this.value);
-  if (!isNaN(idx)) selectRoute(idx);
+  if (!isNaN(idx)) FV.routes.selectRoute(idx);
 });
 function selectRoute(idx) {
   currentRouteIdx = idx; currentNodeIdx = -1; img = null;
@@ -1591,12 +1585,12 @@ document.getElementById('fileInput').addEventListener('change', e => {
     reader.onload = ev => {
       const image = new Image();
       image.onload = () => {
-        pendingNodeImage = image;
+        FV.nodes.pendingNodeImage = image;
         document.getElementById('nodeFileLabel').textContent = file.name;
         document.getElementById('confirmNodeBtn').disabled = false;
       };
       image.onerror = () => {
-        pendingNodeImage = null;
+        FV.nodes.pendingNodeImage = null;
         document.getElementById('nodeFileLabel').textContent = 'Choose image file...';
         document.getElementById('confirmNodeBtn').disabled = true;
         alert('Failed to load image. The file may be corrupt or unsupported.');
@@ -1759,13 +1753,13 @@ document.getElementById('nodeImageInput').addEventListener('change', e => {
     const image = new Image();
     image.onload = () => {
       hideLoader();
-      const node = currentNodes()[renameTargetIdx]; if (!node) return;
+      const node = currentNodes()[FV.nodes.renameTargetIdx]; if (!node) return;
       node.image = image;
-      node.thumbUrl = null; // reset cached thumbnail
+      node.thumbUrl = null;
       document.getElementById('renameNodeImageLabel').textContent = 'Image attached — click to replace';
       document.getElementById('btnRemoveNodeImage').style.display = '';
-      if (renameTargetIdx === currentNodeIdx) { img = image; renderFrame(); }
-      buildSidebar();
+      if (FV.nodes.renameTargetIdx === currentNodeIdx) { img = image; renderFrame(); }
+      FV.nodes.buildSidebar();
       saveRoutes();
     };
     image.onerror = () => { hideLoader(); alert('Failed to load image. The file may be corrupt or unsupported.'); };
@@ -2182,16 +2176,15 @@ function updateHUD() {
 }
 
 // ══════════════════════════════════════════════════
-// HOTSPOTS
+// HOTSPOTS — implementations in FV.hotspots module; shims below module definition
 // ══════════════════════════════════════════════════
 function buildHotspots(index) {
+  // TEMP STUB — real impl in FV.hotspots; shim defined after module; this stub is unreachable
   const container = document.getElementById('hotspots');
   container.innerHTML = '';
   const nodes = currentNodes();
   const current = nodes[index];
   const targets = [];
-  // All navigation is driven by connections[] — linear prev/next is auto-populated
-  // on node creation and can be removed via the Connect tool in the map editor
   const overrides = (current && current.connectionOverrides) ? current.connectionOverrides : {};
   (current && current.connections ? current.connections : []).forEach(targetId => {
     const targetIdx = nodes.findIndex(n => n.id === targetId);
@@ -3219,22 +3212,22 @@ canvas.addEventListener('mousedown', e => {
   canvas.classList.add('dragging');
 });
 canvas.addEventListener('click', e => {
-  if (!hotspotEditMode || !img) return;
+  if (!FV.hotspots.editMode || !img) return;
   if (Math.hypot(e.clientX - mouseDownX, e.clientY - mouseDownY) > 5) return;
-  const pos = canvasClickToYawPitch(e.clientX, e.clientY);
-  toggleHotspotEditMode();
-  if (repositioningHotspotId) {
+  const pos = FV.hotspots.canvasClickToYawPitch(e.clientX, e.clientY);
+  FV.hotspots.toggleEditMode();
+  if (FV.hotspots.repositioningId) {
     const node = currentNodes()[currentNodeIdx];
     if (node) {
-      const hs = (node.hotspots || []).find(h => h.id === repositioningHotspotId);
+      const hs = (node.hotspots || []).find(h => h.id === FV.hotspots.repositioningId);
       if (hs) { hs.yaw = pos.yaw; hs.pitch = pos.pitch; }
     }
-    repositioningHotspotId = null;
-    buildHotspots(currentNodeIdx);
+    FV.hotspots.repositioningId = null;
+    FV.hotspots.build(currentNodeIdx);
     saveRoutes();
-    openManageHotspotsModal();
+    FV.hotspots.openManageModal();
   } else {
-    openAddHotspotModal(pos.yaw, pos.pitch);
+    FV.hotspots.openAddModal(pos.yaw, pos.pitch);
   }
 });
 window.addEventListener('mouseup', () => {
@@ -3433,7 +3426,1176 @@ document.getElementById('newRouteName').addEventListener('keydown', e => { if (e
 document.getElementById('newRouteDesc').addEventListener('keydown', e => { if (e.key==='Enter') confirmNewRoute(); });
 document.getElementById('renameNodeName').addEventListener('keydown', e => { if (e.key==='Enter') confirmRenameNode(); });
 document.getElementById('hotspotLabel').addEventListener('keydown', e => { if (e.key==='Enter') confirmAddHotspot(); });
-document.getElementById('hotspotType').addEventListener('change', updateHotspotTypeFields);
+document.getElementById('hotspotType').addEventListener('change', () => FV.hotspots.updateTypeFields());
+
+// ══════════════════════════════════════════════════
+// HOTSPOTS MODULE (FV.hotspots)
+// ══════════════════════════════════════════════════
+FV.hotspots = {
+  // ── State ──
+  editMode: false,
+  pendingYaw: 0, pendingPitch: 0,
+  editingId: null,
+  repositioningId: null,
+  pendingFileData: null,
+  _helperArrowSvg: `<svg viewBox="0 0 24 24"><path d="M12 4l-1.41 1.41L16.17 11H4v2h12.17l-5.58 5.59L12 20l8-8z"/></svg>`,
+
+  build(index) {
+    const container = document.getElementById('hotspots');
+    container.innerHTML = '';
+    const nodes = currentNodes();
+    const current = nodes[index];
+    const targets = [];
+    const overrides = (current && current.connectionOverrides) ? current.connectionOverrides : {};
+    (current && current.connections ? current.connections : []).forEach(targetId => {
+      const targetIdx = nodes.findIndex(n => n.id === targetId);
+      if (targetIdx < 0) return;
+      const target = nodes[targetIdx];
+      const ov = overrides[targetId];
+      let angle = 0;
+      if (ov && ov.customYaw !== null && ov.customYaw !== undefined) {
+        angle = ov.customYaw;
+      } else if (current.mapX !== null && target.mapX !== null) {
+        angle = Math.atan2(target.mapX - current.mapX, -(target.mapY - current.mapY));
+      }
+      const pitch = (ov && ov.customPitch !== null && ov.customPitch !== undefined) ? ov.customPitch : -0.12;
+      targets.push({ idx: targetIdx, angle, pitch, label: target.name, targetId, hasOverride: !!(ov && ov.customYaw !== null && ov.customYaw !== undefined) });
+    });
+    const nodeColor = current && current.navArrowColor ? current.navArrowColor : null;
+    targets.forEach(t => {
+      const el = document.createElement('div');
+      el.className = 'hotspot';
+      el.dataset.angle = t.angle;
+      el.dataset.pitch = t.pitch;
+      el.dataset.connId = t.targetId;
+      el.innerHTML = `
+        <div class="hotspot-arrow">
+          <svg viewBox="0 0 24 24"><path d="M12 2l-5.5 9h11z"/></svg>
+        </div>
+        <div class="hotspot-label">${escapeHtml(t.label)}</div>`;
+      if (t.hasOverride) el.classList.add('nav-arrow-custom');
+      if (nodeColor) {
+        const arrowEl = el.querySelector('.hotspot-arrow');
+        const r = parseInt(nodeColor.slice(1,3),16), g = parseInt(nodeColor.slice(3,5),16), b = parseInt(nodeColor.slice(5,7),16);
+        arrowEl.style.borderColor = nodeColor;
+        arrowEl.style.background = `rgba(${r},${g},${b},0.15)`;
+        arrowEl.querySelector('svg').style.fill = nodeColor;
+      }
+      el.style.pointerEvents = 'all';
+      el.tabIndex = 0; el.setAttribute('role', 'button'); el.setAttribute('aria-label', 'Navigate to ' + t.label);
+      let dragStartX = null, dragStartY = null, isDraggingArrow = false;
+      let onDocMove, onDocUp;
+      el.addEventListener('mousedown', e => {
+        if (FV.kiosk.active) return;
+        dragStartX = e.clientX; dragStartY = e.clientY; isDraggingArrow = false;
+        onDocMove = ev => {
+          if (dragStartX === null) return;
+          if (!isDraggingArrow && (Math.abs(ev.clientX - dragStartX) > 8 || Math.abs(ev.clientY - dragStartY) > 8)) {
+            isDraggingArrow = true;
+            el.classList.add('nav-arrow-dragging');
+          }
+          if (isDraggingArrow) {
+            const pos = FV.hotspots.canvasClickToYawPitch(ev.clientX, ev.clientY);
+            el.dataset.angle = pos.yaw;
+            el.dataset.pitch = pos.pitch;
+            el._hsVis = undefined; el._hsX = undefined; el._hsY = undefined;
+            FV.hotspots.updatePositions();
+            ev.stopPropagation();
+          }
+        };
+        onDocUp = ev => {
+          document.removeEventListener('mousemove', onDocMove);
+          document.removeEventListener('mouseup', onDocUp);
+          if (isDraggingArrow) {
+            const pos = FV.hotspots.canvasClickToYawPitch(ev.clientX, ev.clientY);
+            const node = currentNodes()[currentNodeIdx];
+            if (node) {
+              node.connectionOverrides = node.connectionOverrides || {};
+              node.connectionOverrides[t.targetId] = { customYaw: pos.yaw, customPitch: pos.pitch };
+              el.classList.add('nav-arrow-custom');
+              el.classList.remove('nav-arrow-dragging');
+              saveRoutes();
+            }
+          }
+          dragStartX = null; dragStartY = null; isDraggingArrow = false;
+        };
+        document.addEventListener('mousemove', onDocMove);
+        document.addEventListener('mouseup', onDocUp);
+        e.stopPropagation();
+      });
+      el.addEventListener('click', e => { if (!isDraggingArrow) navigateTo(t.idx); });
+      el.addEventListener('contextmenu', e => {
+        e.preventDefault();
+        if (FV.kiosk.active) return;
+        if (t.hasOverride || (current.connectionOverrides && current.connectionOverrides[t.targetId])) {
+          if (confirm(`Reset arrow position for "${t.label}" back to auto?`)) {
+            const node = currentNodes()[currentNodeIdx];
+            if (node && node.connectionOverrides) { delete node.connectionOverrides[t.targetId]; saveRoutes(); FV.hotspots.build(currentNodeIdx); }
+          }
+        }
+      });
+      el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); navigateTo(t.idx); } });
+      container.appendChild(el);
+    });
+    if (current) {
+      (current.hotspots || []).forEach(hs => {
+        const el = document.createElement('div');
+        el.className = 'hotspot-custom';
+        el.dataset.angle = hs.yaw;
+        el.dataset.pitch = hs.pitch;
+        const resolvedIcon = hs.icon || (hs.type === 'link' ? 'link' : 'info');
+        const iconSvg = HOTSPOT_ICONS[resolvedIcon] || HOTSPOT_ICONS.info;
+        const pinColor = hs.color || HOTSPOT_ICON_DEFAULTS[resolvedIcon] || '#00c8ff';
+        const pinEl = document.createElement('div');
+        pinEl.className = `hotspot-pin ${hs.type}-type`;
+        if (hs.color) {
+          const r = parseInt(pinColor.slice(1,3),16), g = parseInt(pinColor.slice(3,5),16), b = parseInt(pinColor.slice(5,7),16);
+          pinEl.style.borderColor = pinColor;
+          pinEl.style.background = `rgba(${r},${g},${b},0.15)`;
+        }
+        pinEl.innerHTML = iconSvg;
+        if (hs.color) pinEl.querySelector('svg').style.color = pinColor;
+        const labelEl = document.createElement('div');
+        labelEl.className = 'hotspot-custom-label';
+        labelEl.textContent = hs.label;
+        el.appendChild(pinEl); el.appendChild(labelEl);
+        el.style.pointerEvents = 'all';
+        el.tabIndex = 0; el.setAttribute('role', 'button'); el.setAttribute('aria-label', hs.label + ' (' + hs.type + ')');
+        if (hs.type === 'info') {
+          el.addEventListener('click', () => FV.hotspots.showInfo(hs));
+        } else if (hs.type === 'link') {
+          el.addEventListener('click', () => {
+            const target = nodes.find(n => n.id === hs.content);
+            if (target) navigateTo(nodes.indexOf(target));
+          });
+        } else if (hs.type === 'url') {
+          el.addEventListener('click', () => { if (hs.content && isSafeUrl(hs.content)) window.open(hs.content, '_blank'); });
+        } else if (hs.type === 'image') {
+          el.addEventListener('click', () => FV.hotspots.showImage(hs));
+        } else if (hs.type === 'file') {
+          el.addEventListener('click', () => { if (hs.content && (isSafeUrl(hs.content) || hs.content.startsWith('data:'))) window.open(hs.content, '_blank'); });
+        } else if (hs.type === 'quiz') {
+          el.addEventListener('click', () => {
+            if (hs.quiz && !FV.quiz.answered[hs.id]) FV.quiz.showQuestion({ id: hs.id, name: hs.label, quiz: hs.quiz });
+          });
+        }
+        el.addEventListener('contextmenu', e => {
+          e.preventDefault();
+          if (confirm(`Delete hotspot "${hs.label}"?`)) FV.hotspots.delete(index, hs.id);
+        });
+        container.appendChild(el);
+      });
+    }
+    FV.hotspots.updatePositions();
+    FV.hotspots.updateHelperArrows();
+  },
+
+  updatePositions() {
+    const W = canvas.width, H = canvas.height;
+    const fovRad = fov * Math.PI / 180;
+    const halfFov = fovRad / 2, halfFovV = halfFov / (W/H);
+    document.querySelectorAll('.hotspot, .hotspot-custom').forEach(el => {
+      const worldYaw = parseFloat(el.dataset.angle) || 0;
+      const relYaw   = worldYaw - yaw;
+      const normYaw  = ((relYaw + Math.PI) % (2*Math.PI) + 2*Math.PI) % (2*Math.PI) - Math.PI;
+      const relPitch = (el.dataset.pitch !== undefined && el.dataset.pitch !== '')
+        ? (parseFloat(el.dataset.pitch) || 0) - pitch
+        : -0.12 - pitch;
+      const visible = Math.abs(normYaw) < halfFov * 0.88 && Math.abs(relPitch) < halfFovV;
+      const wasVisible = el._hsVis;
+      if (visible !== wasVisible) {
+        el.style.display = visible ? 'flex' : 'none';
+        el._hsVis = visible;
+      }
+      if (!visible) return;
+      const pxVal = Math.round(W/2 + (normYaw / halfFov) * W/2);
+      const pyVal = Math.round(H/2 - (relPitch / halfFovV) * H/2);
+      if (el._hsX !== pxVal) { el.style.left = pxVal + 'px'; el._hsX = pxVal; }
+      if (el._hsY !== pyVal) { el.style.top = pyVal + 'px'; el._hsY = pyVal; }
+      if (!el.classList.contains('hotspot-custom')) {
+        const arrowEl = el.querySelector('.hotspot-arrow');
+        if (arrowEl) arrowEl.style.transform = `rotate(${normYaw * (180 / Math.PI)}deg)`;
+      }
+    });
+  },
+
+  updateHelperArrows() {
+    const container = document.getElementById('helperArrows');
+    if (!container) return;
+    const nodes = currentNodes();
+    const current = nodes[currentNodeIdx];
+    if (!current || !FV.settings.helperArrowsEnabled || document.getElementById('quizOverlay').style.display === 'flex') {
+      container.innerHTML = '';
+      return;
+    }
+    const W = canvas.width, H = canvas.height;
+    if (!W || !H) return;
+    const fovRad = fov * Math.PI / 180;
+    const halfFov = fovRad / 2, halfFovV = halfFov / (W / H);
+    const pad = 22;
+    const overrides = current.connectionOverrides || {};
+    const connAngles = [];
+    (current.connections || []).forEach(targetId => {
+      const target = nodes.find(n => n.id === targetId);
+      if (!target) return;
+      const ov = overrides[targetId];
+      let worldYaw;
+      if (ov && ov.customYaw !== null && ov.customYaw !== undefined) {
+        worldYaw = ov.customYaw;
+      } else if (current.mapX !== null && target.mapX !== null) {
+        worldYaw = Math.atan2(target.mapX - current.mapX, -(target.mapY - current.mapY));
+      } else {
+        return;
+      }
+      const worldPitch = (ov && ov.customPitch !== null && ov.customPitch !== undefined) ? ov.customPitch : -0.12;
+      connAngles.push({ targetId, worldYaw, worldPitch });
+    });
+    while (container.children.length > connAngles.length) container.removeChild(container.lastChild);
+    while (container.children.length < connAngles.length) {
+      const d = document.createElement('div');
+      d.className = 'helper-arrow';
+      d.innerHTML = FV.hotspots._helperArrowSvg;
+      container.appendChild(d);
+    }
+    connAngles.forEach((c, i) => {
+      const el = container.children[i];
+      const relYaw  = c.worldYaw - yaw;
+      const normYaw = ((relYaw + Math.PI) % (2 * Math.PI) + 2 * Math.PI) % (2 * Math.PI) - Math.PI;
+      const relPitch = c.worldPitch - pitch;
+      const visible  = Math.abs(normYaw) < halfFov * 0.88 && Math.abs(relPitch) < halfFovV;
+      if (visible) { el.style.display = 'none'; return; }
+      el.style.display = 'block';
+      const rawX = W / 2 + (normYaw / halfFov) * W / 2;
+      const rawY = H / 2 - (relPitch / halfFovV) * H / 2;
+      const cx = W / 2, cy = H / 2;
+      const dx = rawX - cx, dy = rawY - cy;
+      const angle = Math.atan2(dy, dx);
+      const hw = W / 2 - pad, hh = H / 2 - pad;
+      const scaleX = hw / Math.abs(dx || 1), scaleY = hh / Math.abs(dy || 1);
+      const scale = Math.min(scaleX, scaleY, 1);
+      const edgeX = cx + dx * scale;
+      const edgeY = cy + dy * scale;
+      const sz = 28;
+      const ex = Math.round(edgeX - sz / 2);
+      const ey = Math.round(edgeY - sz / 2);
+      const rot = angle * (180 / Math.PI);
+      if (el._haX !== ex) { el.style.left = ex + 'px'; el._haX = ex; }
+      if (el._haY !== ey) { el.style.top  = ey + 'px'; el._haY = ey; }
+      if (el._haR !== rot) { el.style.transform = `rotate(${rot}deg)`; el._haR = rot; }
+    });
+  },
+
+  toggleEditMode() {
+    if (!img) return;
+    FV.hotspots.editMode = !FV.hotspots.editMode;
+    canvas.classList.toggle('hotspot-edit-mode', FV.hotspots.editMode);
+    document.getElementById('btnHotspotEdit').classList.toggle('hotspot-edit-active', FV.hotspots.editMode);
+  },
+
+  canvasClickToYawPitch(clientX, clientY) {
+    const rect = canvas.getBoundingClientRect();
+    const px = clientX - rect.left, py = clientY - rect.top;
+    const W = rect.width, H = rect.height;
+    const halfFovH = (fov * Math.PI / 180) / 2;
+    const halfFovV = halfFovH / (W / H);
+    return {
+      yaw:   yaw   + (px / W - 0.5) * 2 * halfFovH,
+      pitch: Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, pitch - (py / H - 0.5) * 2 * halfFovV))
+    };
+  },
+
+  openAddModal(yawVal, pitchVal) {
+    FV.hotspots.editingId = null;
+    FV.hotspots.pendingYaw = yawVal; FV.hotspots.pendingPitch = pitchVal;
+    document.getElementById('hotspotLabel').value = '';
+    document.getElementById('hotspotContent').value = '';
+    document.getElementById('hotspotType').value = 'info';
+    document.getElementById('hotspotUrl').value = '';
+    document.getElementById('hotspotFileLabel').textContent = 'Click to upload image or PDF';
+    FV.hotspots.pendingFileData = null;
+    document.getElementById('hsQuizQText').value = '';
+    [0,1,2,3].forEach(i => { document.getElementById('hsQuizOpt' + i).value = ''; });
+    document.getElementById('hsQuizCorrectSelect').value = '0';
+    document.getElementById('hsQuizExplText').value = '';
+    FV.hotspots.selectIcon('info');
+    document.getElementById('hotspotColor').value = HOTSPOT_ICON_DEFAULTS.info;
+    document.getElementById('addHotspotSub').textContent =
+      `Yaw: ${Math.round(yawVal * 180 / Math.PI)}°  Pitch: ${Math.round(pitchVal * 180 / Math.PI)}°`;
+    document.querySelector('#modalAddHotspot .modal-title').textContent = 'Add Hotspot';
+    document.getElementById('confirmHotspotBtn').textContent = 'Add Hotspot';
+    const sel = document.getElementById('hotspotLinkTarget');
+    sel.innerHTML = '';
+    currentNodes().forEach((n, i) => {
+      if (i === currentNodeIdx) return;
+      const o = document.createElement('option');
+      o.value = n.id; o.textContent = n.id + ': ' + n.name;
+      sel.appendChild(o);
+    });
+    FV.hotspots.updateTypeFields();
+    FV.modals.open('modalAddHotspot');
+    setTimeout(() => document.getElementById('hotspotLabel').focus(), 100);
+  },
+
+  updateTypeFields() {
+    const type = document.getElementById('hotspotType').value;
+    document.getElementById('hotspotContentField').style.display = type === 'info'  ? '' : 'none';
+    document.getElementById('hotspotLinkField').style.display    = type === 'link'  ? '' : 'none';
+    document.getElementById('hotspotUrlField').style.display     = type === 'url'   ? '' : 'none';
+    document.getElementById('hotspotFileField').style.display    = (type === 'image' || type === 'file') ? '' : 'none';
+    document.getElementById('hotspotQuizField').style.display    = type === 'quiz'  ? '' : 'none';
+    document.getElementById('hotspotIconField').style.display    = (type === 'link' || type === 'quiz') ? 'none' : '';
+    const typeIconMap = { url: 'external', image: 'image', file: 'document', quiz: 'quiz' };
+    if (typeIconMap[type]) FV.hotspots.selectIcon(typeIconMap[type]);
+  },
+
+  selectIcon(icon) {
+    document.querySelectorAll('.hs-icon-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.icon === icon));
+    document.getElementById('hotspotColor').value = HOTSPOT_ICON_DEFAULTS[icon] || '#00c8ff';
+  },
+
+  resetColor() {
+    const activeBtn = document.querySelector('.hs-icon-btn.active');
+    const icon = activeBtn ? activeBtn.dataset.icon : 'info';
+    document.getElementById('hotspotColor').value = HOTSPOT_ICON_DEFAULTS[icon] || '#00c8ff';
+  },
+
+  resetNavArrowColor() {
+    document.getElementById('navArrowColorInput').value = '#f0a500';
+  },
+
+  confirmAdd() {
+    const label = document.getElementById('hotspotLabel').value.trim();
+    if (!label) { document.getElementById('hotspotLabel').focus(); return; }
+    const type = document.getElementById('hotspotType').value;
+    let content = '', filename = null;
+    if (type === 'info')       content = document.getElementById('hotspotContent').value.trim();
+    else if (type === 'link')  content = document.getElementById('hotspotLinkTarget').value;
+    else if (type === 'url')   content = document.getElementById('hotspotUrl').value.trim();
+    else if (type === 'image' || type === 'file') {
+      if (FV.hotspots.pendingFileData) { content = FV.hotspots.pendingFileData.dataUrl; filename = FV.hotspots.pendingFileData.filename; }
+      else if (FV.hotspots.editingId) {
+        const existingHs = (currentNodes()[currentNodeIdx]?.hotspots || []).find(h => h.id === FV.hotspots.editingId);
+        if (existingHs) { content = existingHs.content; filename = existingHs.filename || null; }
+      }
+    }
+    let hsQuiz = null;
+    if (type === 'quiz') {
+      const qText = document.getElementById('hsQuizQText').value.trim();
+      const opts = [0,1,2,3].map(i => document.getElementById('hsQuizOpt' + i).value.trim());
+      const correctIdx = parseInt(document.getElementById('hsQuizCorrectSelect').value) || 0;
+      const explanation = document.getElementById('hsQuizExplText').value.trim();
+      if (!qText || opts.some(o => !o)) { alert('Please fill in the question and all four options.'); return; }
+      hsQuiz = { question: qText, options: opts, correctIndex: correctIdx, explanation };
+    }
+    if ((type === 'url') && !content) { document.getElementById('hotspotUrl').focus(); return; }
+    if ((type === 'image' || type === 'file') && !content) { alert('Please upload a file.'); return; }
+    const activeIconBtn = document.querySelector('.hs-icon-btn.active');
+    const icon = activeIconBtn ? activeIconBtn.dataset.icon : (type === 'link' ? 'link' : type === 'quiz' ? 'quiz' : 'info');
+    const pickedColor = document.getElementById('hotspotColor').value;
+    const defaultColor = HOTSPOT_ICON_DEFAULTS[icon] || '#00c8ff';
+    const color = pickedColor.toLowerCase() !== defaultColor.toLowerCase() ? pickedColor : null;
+    const node = currentNodes()[currentNodeIdx];
+    if (!node) return;
+    node.hotspots = node.hotspots || [];
+    if (FV.hotspots.editingId) {
+      const hs = node.hotspots.find(h => h.id === FV.hotspots.editingId);
+      if (hs) { hs.type = type; hs.icon = icon; hs.color = color; hs.label = label; hs.content = content; hs.filename = filename; hs.quiz = hsQuiz; }
+      FV.hotspots.editingId = null;
+      FV.modals.close('modalAddHotspot');
+      FV.hotspots.build(currentNodeIdx);
+      saveRoutes();
+      FV.hotspots.openManageModal();
+    } else {
+      node.hotspots.push({ id: uid('HS'), type, icon, color, filename, yaw: FV.hotspots.pendingYaw, pitch: FV.hotspots.pendingPitch, label, content, quiz: hsQuiz });
+      FV.hotspots.pendingFileData = null;
+      FV.modals.close('modalAddHotspot');
+      FV.hotspots.build(currentNodeIdx);
+      saveRoutes();
+    }
+  },
+
+  cancelModal() {
+    const wasEditing = !!FV.hotspots.editingId;
+    FV.hotspots.editingId = null;
+    FV.modals.close('modalAddHotspot');
+    if (wasEditing) FV.hotspots.openManageModal();
+  },
+
+  delete(nodeIdx, hotspotId) {
+    const node = currentNodes()[nodeIdx]; if (!node) return;
+    node.hotspots = (node.hotspots || []).filter(h => h.id !== hotspotId);
+    FV.hotspots.build(currentNodeIdx);
+    saveRoutes();
+  },
+
+  openManageModal() {
+    const node = currentNodes()[currentNodeIdx];
+    document.getElementById('manageHotspotNodeName').textContent = node ? node.name : '—';
+    FV.hotspots.buildManageList();
+    FV.modals.open('modalManageHotspots');
+  },
+
+  buildManageList() {
+    const node = currentNodes()[currentNodeIdx];
+    const list = document.getElementById('hotspotManageList');
+    const hotspots = (node && node.hotspots) ? node.hotspots : [];
+    if (!hotspots.length) {
+      list.innerHTML = '<div style="padding:20px 0;font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:1px;text-align:center;">No hotspots on this node yet.</div>';
+      return;
+    }
+    list.innerHTML = '';
+    hotspots.forEach(hs => {
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);';
+      const resolvedIcon = hs.icon || (hs.type === 'link' ? 'link' : 'info');
+      const listPinColor = hs.color || HOTSPOT_ICON_DEFAULTS[resolvedIcon] || '#00c8ff';
+      const listIconSvg = HOTSPOT_ICONS[resolvedIcon] || HOTSPOT_ICONS.info;
+      const listIcon = listIconSvg.replace('<svg ', `<svg width="14" height="14" fill="${listPinColor}" style="flex-shrink:0" `);
+      const badgeColor = hs.type === 'info' ? 'rgba(0,200,255,0.12)' : hs.type === 'quiz' ? 'rgba(224,64,251,0.12)' : 'rgba(0,230,118,0.12)';
+      const badgeText = hs.type === 'info' ? 'var(--accent2)' : hs.type === 'quiz' ? '#e040fb' : 'var(--success)';
+      const previewText = hs.type === 'info'   ? (hs.content || '—')
+        : hs.type === 'link'   ? ('→ ' + (currentNodes().find(n => n.id === hs.content) || {name: hs.content}).name)
+        : hs.type === 'url'    ? (hs.content || '—')
+        : hs.type === 'image'  ? ('🖼 ' + (hs.filename || 'Image'))
+        : hs.type === 'file'   ? ('📄 ' + (hs.filename || 'Document'))
+        : hs.type === 'quiz'   ? ('❓ ' + (hs.quiz ? hs.quiz.question : '—'))
+        : '—';
+      row.innerHTML = `
+        ${listIcon}
+        <div style="flex:1;min-width:0;">
+          <div style="font-family:var(--cond);font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(hs.label)}</div>
+          <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(previewText)}</div>
+        </div>
+        <span style="font-family:var(--mono);font-size:8px;letter-spacing:1px;padding:2px 5px;border-radius:2px;background:${badgeColor};color:${badgeText};flex-shrink:0;">${hs.type.toUpperCase()}</span>
+        <button class="loc-action-btn" title="Edit" data-hsid="${hs.id}" data-action="edit">
+          <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+        </button>
+        <button class="loc-action-btn" title="Reposition" data-hsid="${hs.id}" data-action="reposition">
+          <svg viewBox="0 0 24 24"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06z"/></svg>
+        </button>
+        <button class="loc-action-btn danger" title="Delete" data-hsid="${hs.id}" data-action="delete">
+          <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+        </button>`;
+      list.appendChild(row);
+    });
+    list.onclick = e => {
+      const btn = e.target.closest('[data-action]');
+      if (!btn) return;
+      const { hsid, action } = btn.dataset;
+      if (action === 'edit') FV.hotspots.openEditModal(hsid);
+      else if (action === 'reposition') FV.hotspots.startReposition(hsid);
+      else if (action === 'delete') { if (confirm('Delete this hotspot?')) { FV.hotspots.delete(currentNodeIdx, hsid); FV.hotspots.buildManageList(); } }
+    };
+  },
+
+  openEditModal(hsId) {
+    const node = currentNodes()[currentNodeIdx];
+    if (!node) return;
+    const hs = (node.hotspots || []).find(h => h.id === hsId);
+    if (!hs) return;
+    FV.hotspots.editingId = hsId;
+    FV.hotspots.pendingYaw = hs.yaw; FV.hotspots.pendingPitch = hs.pitch;
+    document.getElementById('hotspotLabel').value = hs.label;
+    document.getElementById('hotspotContent').value = hs.type === 'info' ? (hs.content || '') : '';
+    document.getElementById('hotspotType').value = hs.type;
+    document.getElementById('hotspotUrl').value = hs.type === 'url' ? (hs.content || '') : '';
+    if (hs.type === 'image' || hs.type === 'file') {
+      FV.hotspots.pendingFileData = hs.content ? { dataUrl: hs.content, filename: hs.filename || 'file' } : null;
+      document.getElementById('hotspotFileLabel').textContent = hs.filename || (hs.content ? 'File attached — click to replace' : 'Click to upload image or PDF');
+    } else {
+      FV.hotspots.pendingFileData = null;
+      document.getElementById('hotspotFileLabel').textContent = 'Click to upload image or PDF';
+    }
+    if (hs.type === 'quiz' && hs.quiz) {
+      document.getElementById('hsQuizQText').value = hs.quiz.question || '';
+      [0,1,2,3].forEach(i => { document.getElementById('hsQuizOpt' + i).value = hs.quiz.options[i] || ''; });
+      document.getElementById('hsQuizCorrectSelect').value = hs.quiz.correctIndex ?? 0;
+      document.getElementById('hsQuizExplText').value = hs.quiz.explanation || '';
+    } else {
+      document.getElementById('hsQuizQText').value = '';
+      [0,1,2,3].forEach(i => { document.getElementById('hsQuizOpt' + i).value = ''; });
+      document.getElementById('hsQuizCorrectSelect').value = '0';
+      document.getElementById('hsQuizExplText').value = '';
+    }
+    const editIcon = hs.icon || (hs.type === 'link' ? 'link' : hs.type === 'url' ? 'external' : hs.type === 'image' ? 'image' : hs.type === 'file' ? 'document' : hs.type === 'quiz' ? 'quiz' : 'info');
+    FV.hotspots.selectIcon(editIcon);
+    document.getElementById('hotspotColor').value = hs.color || HOTSPOT_ICON_DEFAULTS[editIcon] || '#00c8ff';
+    const sel = document.getElementById('hotspotLinkTarget');
+    sel.innerHTML = '';
+    currentNodes().forEach((n, i) => {
+      if (i === currentNodeIdx) return;
+      const o = document.createElement('option');
+      o.value = n.id; o.textContent = n.id + ': ' + n.name;
+      if (n.id === hs.content) o.selected = true;
+      sel.appendChild(o);
+    });
+    FV.hotspots.updateTypeFields();
+    document.getElementById('addHotspotSub').textContent = `Editing: ${hs.label}`;
+    document.querySelector('#modalAddHotspot .modal-title').textContent = 'Edit Hotspot';
+    document.getElementById('confirmHotspotBtn').textContent = 'Save Changes';
+    FV.modals.close('modalManageHotspots');
+    FV.modals.open('modalAddHotspot');
+    setTimeout(() => document.getElementById('hotspotLabel').focus(), 100);
+  },
+
+  startReposition(hsId) {
+    if (!img) return;
+    if (FV.hotspots.repositioningId) FV.hotspots.repositioningId = null;
+    FV.hotspots.repositioningId = hsId;
+    FV.modals.close('modalManageHotspots');
+    FV.hotspots.editMode = true;
+    canvas.classList.add('hotspot-edit-mode');
+    document.getElementById('btnHotspotEdit').classList.add('hotspot-edit-active');
+  },
+
+  showInfo(hs) {
+    document.getElementById('hotspotInfoTitle').textContent = hs.label;
+    document.getElementById('hotspotInfoText').textContent  = hs.content;
+    document.getElementById('hotspotInfoPopup').style.display = 'block';
+  },
+
+  showImage(hs) {
+    const src = hs.content || '';
+    if (src && !isSafeImageSrc(src)) return;
+    document.getElementById('lightboxImg').src = src;
+    document.getElementById('lightboxImg').alt = hs.label || 'Hotspot image';
+    document.getElementById('lightboxTitle').textContent = hs.label + (hs.filename ? ' — ' + hs.filename : '');
+    document.getElementById('hotspotLightbox').classList.add('open');
+  },
+
+  closeLightbox() {
+    document.getElementById('hotspotLightbox').classList.remove('open');
+    document.getElementById('lightboxImg').src = '';
+  }
+};
+// Backward-compat shims
+function buildHotspots(index)       { FV.hotspots.build(index); }
+function updateHotspotPositions()   { FV.hotspots.updatePositions(); }
+function updateHelperArrows()       { FV.hotspots.updateHelperArrows(); }
+function toggleHotspotEditMode()    { FV.hotspots.toggleEditMode(); }
+function openManageHotspotsModal()  { FV.hotspots.openManageModal(); }
+function closeLightbox()            { FV.hotspots.closeLightbox(); }
+function resetNavArrowColor()       { FV.hotspots.resetNavArrowColor(); }
+function selectHotspotIcon(icon)    { FV.hotspots.selectIcon(icon); }
+function resetHotspotColor()        { FV.hotspots.resetColor(); }
+function cancelHotspotModal()       { FV.hotspots.cancelModal(); }
+function confirmAddHotspot()        { FV.hotspots.confirmAdd(); }
+function deleteHotspot(idx, id)     { FV.hotspots.delete(idx, id); }
+function openAddHotspotModal(y, p)  { FV.hotspots.openAddModal(y, p); }
+function canvasClickToYawPitch(x,y) { return FV.hotspots.canvasClickToYawPitch(x, y); }
+
+// ══════════════════════════════════════════════════
+// NODES MODULE (FV.nodes)
+// ══════════════════════════════════════════════════
+FV.nodes = {
+  // ── State ──
+  pendingNodeImage: null,
+  renameTargetIdx: -1,
+
+  triggerAdd() {
+    if (!currentRoute()) { openNewRouteModal(); return; }
+    const nextNum = currentNodes().length + 1;
+    document.getElementById('newNodeName').value = '';
+    document.getElementById('newNodeDesc').value  = '';
+    document.getElementById('nodeFileLabel').textContent = 'Choose image file...';
+    document.getElementById('addNodeModalSub').textContent = `Adding Node ${String(nextNum).padStart(2,'0')} to "${currentRoute().name}"`;
+    document.getElementById('confirmNodeBtn').disabled = false;
+    FV.nodes.pendingNodeImage = null;
+    FV.modals.open('modalAddNode');
+    setTimeout(() => document.getElementById('newNodeName').focus(), 100);
+  },
+
+  cancelAdd() {
+    FV.nodes.pendingNodeImage = null;
+    FV.modals.close('modalAddNode');
+  },
+
+  confirmAdd() {
+    const name = document.getElementById('newNodeName').value.trim() || ('Node ' + (currentNodes().length + 1));
+    const nodes = currentNodes();
+    const node = {
+      id: 'N' + String(nodes.length + 1).padStart(2,'0'),
+      name,
+      desc: document.getElementById('newNodeDesc').value.trim(),
+      image: FV.nodes.pendingNodeImage || null,
+      mapX: null, mapY: null,
+      floorId: null,
+      connections: [],
+      hotspots: [],
+      navArrowColor: null,
+      quiz: null
+    };
+    if (nodes.length >= 1) {
+      const prev = nodes[nodes.length - 1];
+      prev.connections.push(node.id);
+      node.connections.push(prev.id);
+    }
+    nodes.push(node);
+    FV.nodes.pendingNodeImage = null;
+    FV.modals.close('modalAddNode');
+    rebuildRouteSelect(); FV.nodes.buildSidebar(); drawMinimap(); FV.nodes.updateNodeCount();
+    navigateTo(nodes.length - 1);
+    saveRoutes();
+  },
+
+  openRenameModal(nodeIdx) {
+    const node = currentNodes()[nodeIdx]; if (!node) return;
+    FV.nodes.renameTargetIdx = nodeIdx;
+    document.getElementById('renameNodeName').value = node.name;
+    document.getElementById('renameNodeDesc').value  = node.desc || '';
+    document.getElementById('renameNodeSub').textContent = `Editing Node ${String(nodeIdx+1).padStart(2,'0')}`;
+    document.getElementById('renameNodeImageLabel').textContent = node.image ? 'Image attached — click to replace' : 'No image — click to add';
+    document.getElementById('btnRemoveNodeImage').style.display = node.image ? '' : 'none';
+    document.getElementById('navArrowColorInput').value = node.navArrowColor || '#f0a500';
+    const quizContent = document.getElementById('quizEditorContent');
+    const quizToggle  = document.getElementById('quizToggleLabel');
+    if (node.quiz) {
+      quizContent.style.display = 'flex';
+      quizToggle.textContent = '− Remove';
+      document.getElementById('quizQText').value = node.quiz.question || '';
+      ['quizOpt0','quizOpt1','quizOpt2','quizOpt3'].forEach((id, i) => {
+        document.getElementById(id).value = node.quiz.options[i] || '';
+      });
+      document.getElementById('quizCorrectSelect').value = node.quiz.correctIndex ?? 0;
+      document.getElementById('quizExplText').value = node.quiz.explanation || '';
+    } else {
+      quizContent.style.display = 'none';
+      quizToggle.textContent = '+ Add Question';
+      document.getElementById('quizQText').value = '';
+      ['quizOpt0','quizOpt1','quizOpt2','quizOpt3'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('quizCorrectSelect').value = '0';
+      document.getElementById('quizExplText').value = '';
+    }
+    FV.nodes.refreshModalConnections();
+    FV.modals.open('modalRenameNode');
+    setTimeout(() => document.getElementById('renameNodeName').focus(), 100);
+  },
+
+  refreshModalConnections() {
+    if (FV.nodes.renameTargetIdx < 0) return;
+    const nodes   = currentNodes();
+    const node    = nodes[FV.nodes.renameTargetIdx]; if (!node) return;
+    const route   = currentRoute();
+    const conns   = node.connections || [];
+    const listEl  = document.getElementById('modalConnList');
+    const clearEl = document.getElementById('modalConnClearAll');
+    const selEl   = document.getElementById('modalConnTarget');
+    listEl.innerHTML = conns.length ? '' : '<div style="font-family:var(--mono);font-size:9px;color:var(--muted);padding:3px 0;">No connections yet</div>';
+    conns.forEach(cid => {
+      const cn = nodes.find(n => n.id === cid); if (!cn) return;
+      const cross = cn.floorId !== node.floorId ? ' ⬍' : '';
+      const floorName = (route?.floors || []).find(f => f.id === cn.floorId)?.name || '';
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 7px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:2px;';
+      const escapedBadge = floorName ? ` [${escapeHtml(floorName)}]` : '';
+      row.innerHTML = `<span style="flex:1;font-family:var(--mono);font-size:9px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(cn.id)}: ${escapeHtml(cn.name)}${cross}<em style="opacity:.5;font-style:normal;">${escapedBadge}</em></span>`;
+      const removeBtn = document.createElement('span');
+      removeBtn.textContent = '×';
+      removeBtn.style.cssText = 'font-size:14px;color:var(--muted);cursor:pointer;line-height:1;flex-shrink:0;';
+      removeBtn.title = 'Remove connection';
+      removeBtn.addEventListener('click', () => FV.nodes.removeConnectionFromModal(cid));
+      row.appendChild(removeBtn);
+      listEl.appendChild(row);
+    });
+    clearEl.style.display = conns.length ? '' : 'none';
+    selEl.innerHTML = '<option value="">— Select node to connect —</option>';
+    nodes.forEach((n, i) => {
+      if (i === FV.nodes.renameTargetIdx) return;
+      if (conns.includes(n.id)) return;
+      const cross = n.floorId !== node.floorId ? ' ⬍' : '';
+      const floorName = (route?.floors || []).find(f => f.id === n.floorId)?.name || '';
+      const badge = floorName ? ` [${floorName}]` : '';
+      const opt = document.createElement('option');
+      opt.value = n.id;
+      opt.textContent = `${n.id}: ${n.name}${cross}${badge}`;
+      selEl.appendChild(opt);
+    });
+  },
+
+  addConnectionFromModal() {
+    const targetId = document.getElementById('modalConnTarget').value; if (!targetId) return;
+    const nodes = currentNodes();
+    const node  = nodes[FV.nodes.renameTargetIdx]; if (!node) return;
+    if (!FV.connections.add(nodes, node.id, targetId)) return;
+    FV.nodes.refreshModalConnections();
+    if (mapEditorOpen) { buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor(); }
+    if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
+    drawMinimap(); saveRoutes();
+  },
+
+  removeConnectionFromModal(targetId) {
+    const nodes = currentNodes();
+    const node  = nodes[FV.nodes.renameTargetIdx]; if (!node) return;
+    FV.connections.remove(nodes, node.id, targetId);
+    FV.nodes.refreshModalConnections();
+    if (mapEditorOpen) { buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor(); }
+    if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
+    drawMinimap(); saveRoutes();
+  },
+
+  removeAllConnectionsFromModal() {
+    const nodes = currentNodes();
+    const node  = nodes[FV.nodes.renameTargetIdx]; if (!node) return;
+    if (!(node.connections || []).length) return;
+    if (!confirm(`Remove all ${node.connections.length} connection(s) from ${node.name}?`)) return;
+    FV.connections.removeAll(nodes, node.id);
+    FV.nodes.refreshModalConnections();
+    if (mapEditorOpen) { buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor(); }
+    if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
+    drawMinimap(); saveRoutes();
+  },
+
+  removeNodeImage() {
+    const node = currentNodes()[FV.nodes.renameTargetIdx]; if (!node) return;
+    if (!confirm('Remove the panorama from this node?')) return;
+    node.image = null; node.thumbUrl = null;
+    document.getElementById('renameNodeImageLabel').textContent = 'No image — click to add';
+    document.getElementById('btnRemoveNodeImage').style.display = 'none';
+    if (FV.nodes.renameTargetIdx === currentNodeIdx) { img = null; renderFrame(); }
+    FV.nodes.buildSidebar();
+    saveRoutes();
+  },
+
+  confirmRenameNode() {
+    if (FV.nodes.renameTargetIdx < 0) return;
+    const node = currentNodes()[FV.nodes.renameTargetIdx]; if (!node) return;
+    node.name = document.getElementById('renameNodeName').value.trim() || node.name;
+    node.desc = document.getElementById('renameNodeDesc').value.trim();
+    const pickedColor = document.getElementById('navArrowColorInput').value;
+    node.navArrowColor = (pickedColor && pickedColor.toLowerCase() !== '#f0a500') ? pickedColor : null;
+    if (document.getElementById('quizEditorContent').style.display !== 'none') {
+      const qText = document.getElementById('quizQText').value.trim();
+      const opts   = [0,1,2,3].map(i => document.getElementById('quizOpt'+i).value.trim());
+      if (qText && opts.every(o => o)) {
+        node.quiz = {
+          question: qText,
+          options: opts,
+          correctIndex: parseInt(document.getElementById('quizCorrectSelect').value) || 0,
+          explanation: document.getElementById('quizExplText').value.trim()
+        };
+      } else if (qText || opts.some(o => o)) {
+        alert('Quiz not saved: please fill in the question and all 4 answer options, or clear all fields to remove the quiz.');
+        return;
+      } else {
+        node.quiz = null;
+      }
+    } else {
+      node.quiz = null;
+    }
+    FV.modals.close('modalRenameNode');
+    FV.nodes.buildSidebar(); drawMinimap();
+    if (FV.nodes.renameTargetIdx === currentNodeIdx) { updateHeaders(node, FV.nodes.renameTargetIdx); buildHotspots(FV.nodes.renameTargetIdx); }
+    if (mapEditorOpen) { buildEditorNodeList(); drawMapEditor(); }
+    FV.nodes.renameTargetIdx = -1;
+    saveRoutes();
+  },
+
+  deleteNode(nodeIdx) {
+    const nodes = currentNodes();
+    if (nodeIdx < 0 || nodeIdx >= nodes.length) return;
+    if (!confirm(`Delete Node ${String(nodeIdx+1).padStart(2,'0')}: "${nodes[nodeIdx].name}"?`)) return;
+    const deletedId = nodes[nodeIdx].id;
+    nodes.splice(nodeIdx, 1);
+    const oldIds = nodes.map((n, i) => { const old = n.id; n.id = 'N' + String(i+1).padStart(2,'0'); return { old, newId: n.id }; });
+    const idMap = {};
+    oldIds.forEach(({ old, newId }) => { idMap[old] = newId; });
+    nodes.forEach(n => {
+      n.connections = (n.connections || []).filter(id => id !== deletedId).map(id => idMap[id] || id);
+    });
+    nodes.forEach(n => {
+      n.hotspots = (n.hotspots || []).filter(h => !(h.type === 'link' && h.content === deletedId));
+      n.hotspots.forEach(h => { if (h.type === 'link' && idMap[h.content]) h.content = idMap[h.content]; });
+    });
+    FV.nodes.buildSidebar(); rebuildRouteSelect(); drawMinimap(); FV.nodes.updateNodeCount();
+    if (mapEditorOpen) { buildEditorNodeList(); drawMapEditor(); }
+    if (!nodes.length) {
+      currentNodeIdx = -1; img = null;
+      document.getElementById('overlay').style.opacity = '0';
+      clearViewer();
+    } else {
+      navigateTo(Math.min(nodeIdx, nodes.length - 1));
+    }
+    saveRoutes();
+  },
+
+  duplicateNode(nodeIdx) {
+    const nodes = currentNodes();
+    const src = nodes[nodeIdx]; if (!src) return;
+    const newId = 'N' + String(nodes.length + 1).padStart(2, '0');
+    const copy = {
+      id: newId, name: src.name + ' (copy)', desc: src.desc,
+      image: src.image, thumbUrl: src.thumbUrl || null,
+      mapX: src.mapX !== null ? src.mapX + 20 : null,
+      mapY: src.mapY !== null ? src.mapY + 20 : null,
+      floorId: src.floorId || null, connections: [],
+      hotspots: (src.hotspots || []).map(h => ({ ...h, id: 'HS' + Date.now() + Math.random().toString(36).slice(2,6) })),
+      navArrowColor: src.navArrowColor || null,
+      quiz: src.quiz ? { ...src.quiz, options: [...src.quiz.options] } : null
+    };
+    nodes.push(copy);
+    FV.nodes.buildSidebar(); rebuildRouteSelect(); drawMinimap(); FV.nodes.updateNodeCount();
+    if (mapEditorOpen) { buildEditorNodeList(); drawMapEditor(); }
+    navigateTo(nodes.length - 1);
+    saveRoutes();
+  },
+
+  filterSidebarNodes(query) {
+    const q = query.toLowerCase().trim();
+    document.querySelectorAll('#locationList .loc-item').forEach(el => {
+      const name = (el.querySelector('.loc-name')?.textContent || '').toLowerCase();
+      const desc = (el.querySelector('.loc-desc')?.textContent || '').toLowerCase();
+      const id = (el.querySelector('.loc-node-num')?.textContent || '').toLowerCase();
+      el.style.display = (!q || name.includes(q) || desc.includes(q) || id.includes(q)) ? '' : 'none';
+    });
+  },
+
+  updateNodeCount() {
+    document.getElementById('nodeCountVal').textContent = currentNodes().length;
+  },
+
+  getThumbnail(node) {
+    if (node.thumbUrl) return node.thumbUrl;
+    if (!node.image || !node.image.complete || !node.image.naturalWidth) return null;
+    const tw = 96, th = 60;
+    const tmp = document.createElement('canvas');
+    tmp.width = tw; tmp.height = th;
+    const tctx = tmp.getContext('2d');
+    const iw = node.image.naturalWidth, ih = node.image.naturalHeight;
+    const cropW = Math.round(iw / 4);
+    const cropH = Math.round(ih / 3);
+    const cropX = Math.round((iw - cropW) / 2);
+    const cropY = Math.round((ih - cropH) / 2);
+    tctx.drawImage(node.image, cropX, cropY, cropW, cropH, 0, 0, tw, th);
+    node.thumbUrl = tmp.toDataURL('image/jpeg', 0.75);
+    return node.thumbUrl;
+  },
+
+  buildSidebar() {
+    const list  = document.getElementById('locationList');
+    const nodes = currentNodes();
+    list.innerHTML = '';
+    if (!nodes.length) {
+      list.innerHTML = '<div style="padding:16px 14px;font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.8;letter-spacing:1px;">No nodes yet. Click "Add Node" to add your first panorama.</div>';
+      return;
+    }
+    nodes.forEach((node, i) => {
+      const thumb = FV.nodes.getThumbnail(node);
+      const el = document.createElement('div');
+      el.className = 'loc-item' + (i === currentNodeIdx ? ' active' : '');
+      el.draggable = true;
+      el.dataset.idx = i;
+      el.innerHTML = `
+        <div class="loc-drag-handle" title="Drag to reorder">&#8801;</div>
+        <div class="loc-node-num">N${String(i+1).padStart(2,'0')}</div>
+        <div class="loc-thumb-wrap">${thumb ? `<img class="loc-thumb" src="${thumb}">` : ''}</div>
+        <div class="loc-info">
+          <div class="loc-name">${escapeHtml(node.name)}</div>
+          ${node.desc ? `<div class="loc-desc">${escapeHtml(node.desc)}</div>` : ''}
+        </div>
+        ${node.quiz ? `<span class="loc-quiz-badge" title="Quiz question at this node">Q</span>` : ''}
+        <div class="loc-actions">
+          <button class="loc-action-btn" title="Rename" onclick="event.stopPropagation();openRenameModal(${i})">
+            <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+          </button>
+          <button class="loc-action-btn" title="Duplicate" onclick="event.stopPropagation();duplicateNode(${i})">
+            <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+          </button>
+          <button class="loc-action-btn danger" title="Delete" onclick="event.stopPropagation();deleteNode(${i})">
+            <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+          </button>
+        </div>`;
+      el.addEventListener('click', () => navigateTo(i));
+      el.addEventListener('dragstart', e => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', i);
+        setTimeout(() => el.style.opacity = '0.4', 0);
+      });
+      el.addEventListener('dragend', () => { el.style.opacity = ''; list.querySelectorAll('.loc-item').forEach(x => x.classList.remove('drag-over')); });
+      el.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; list.querySelectorAll('.loc-item').forEach(x => x.classList.remove('drag-over')); el.classList.add('drag-over'); });
+      el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+      el.addEventListener('drop', e => {
+        e.preventDefault();
+        const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
+        const toIdx   = parseInt(el.dataset.idx, 10);
+        if (fromIdx === toIdx) return;
+        FV.nodes.reorderNode(fromIdx, toIdx);
+      });
+      list.appendChild(el);
+    });
+  },
+
+  reorderNode(fromIdx, toIdx) {
+    const nodes = currentNodes();
+    const activeNode = nodes[currentNodeIdx] || null;
+    const [moved] = nodes.splice(fromIdx, 1);
+    nodes.splice(toIdx, 0, moved);
+    const oldIds = nodes.map((n, i) => { const old = n.id; n.id = 'N' + String(i+1).padStart(2,'0'); return { old, newId: n.id }; });
+    const idMap = {};
+    oldIds.forEach(({ old, newId }) => { idMap[old] = newId; });
+    nodes.forEach(n => { if (n.connections) n.connections = n.connections.map(cid => idMap[cid] || cid); });
+    nodes.forEach(n => {
+      (n.hotspots || []).forEach(h => { if (h.type === 'link' && idMap[h.content]) h.content = idMap[h.content]; });
+    });
+    if (activeNode) currentNodeIdx = nodes.indexOf(activeNode);
+    FV.nodes.buildSidebar();
+    drawMinimap();
+    if (mapEditorOpen) { buildEditorNodeList(); drawMapEditor(); }
+    saveRoutes();
+  }
+};
+// Backward-compat shims
+function triggerAddNode()                    { FV.nodes.triggerAdd(); }
+function cancelAddNode()                     { FV.nodes.cancelAdd(); }
+function confirmAddNode()                    { FV.nodes.confirmAdd(); }
+function openRenameModal(idx)                { FV.nodes.openRenameModal(idx); }
+function refreshModalConnections()           { FV.nodes.refreshModalConnections(); }
+function addConnectionFromModal()            { FV.nodes.addConnectionFromModal(); }
+function removeConnectionFromModal(targetId) { FV.nodes.removeConnectionFromModal(targetId); }
+function removeAllConnectionsFromModal()     { FV.nodes.removeAllConnectionsFromModal(); }
+function removeNodeImage()                   { FV.nodes.removeNodeImage(); }
+function confirmRenameNode()                 { FV.nodes.confirmRenameNode(); }
+function deleteNode(idx)                     { FV.nodes.deleteNode(idx); }
+function duplicateNode(idx)                  { FV.nodes.duplicateNode(idx); }
+function filterSidebarNodes(q)               { FV.nodes.filterSidebarNodes(q); }
+function updateNodeCount()                   { FV.nodes.updateNodeCount(); }
+function getThumbnail(node)                  { return FV.nodes.getThumbnail(node); }
+function buildSidebar()                      { FV.nodes.buildSidebar(); }
+function reorderNode(from, to)               { FV.nodes.reorderNode(from, to); }
+
+// ══════════════════════════════════════════════════
+// ROUTES MODULE (FV.routes)
+// ══════════════════════════════════════════════════
+FV.routes = {
+  openNewRouteModal() {
+    document.getElementById('newRouteName').value = '';
+    document.getElementById('newRouteDesc').value  = '';
+    FV.modals.open('modalNewRoute');
+    setTimeout(() => document.getElementById('newRouteName').focus(), 100);
+  },
+
+  confirmNewRoute() {
+    const name = document.getElementById('newRouteName').value.trim();
+    if (!name) { document.getElementById('newRouteName').focus(); return; }
+    const route = { id: uid('R'), name, desc: document.getElementById('newRouteDesc').value.trim(), documents: [], nodes: [], floors: [{ id: 'F0', name: 'Floor 1', image: null }] };
+    routes.push(route);
+    FV.modals.close('modalNewRoute');
+    FV.routes.rebuildRouteSelect();
+    FV.routes.selectRoute(routes.length - 1);
+    document.getElementById('welcome').classList.add('hidden');
+    saveRoutes();
+  },
+
+  duplicateRoute() {
+    const src = currentRoute();
+    if (!src) { alert('Select a route to duplicate.'); return; }
+    const copy = {
+      id: uid('R'),
+      name: src.name + ' (copy)',
+      desc: src.desc,
+      documents: (src.documents || []).map(d => ({ ...d })),
+      floors: (src.floors || []).map(f => ({ id: f.id, name: f.name, image: f.image })),
+      nodes: src.nodes.map(n => ({
+        id: n.id, name: n.name, desc: n.desc,
+        image: n.image,
+        thumbUrl: n.thumbUrl || null,
+        mapX: n.mapX, mapY: n.mapY,
+        floorId: n.floorId || null,
+        connections: [...(n.connections || [])],
+        connectionOverrides: Object.assign({}, n.connectionOverrides || {}),
+        hotspots: (n.hotspots || []).map(h => ({ ...h, quiz: h.quiz ? { ...h.quiz, options: [...h.quiz.options] } : h.quiz })),
+        navArrowColor: n.navArrowColor || null,
+        quiz: n.quiz ? { ...n.quiz, options: [...n.quiz.options] } : null
+      }))
+    };
+    routes.push(copy);
+    FV.routes.rebuildRouteSelect();
+    FV.routes.selectRoute(routes.length - 1);
+    document.getElementById('welcome').classList.add('hidden');
+    saveRoutes();
+  },
+
+  deleteRoute() {
+    if (!currentRoute()) { alert('No route selected.'); return; }
+    const name = currentRoute().name;
+    const nodeCount = currentNodes().length;
+    const msg = nodeCount
+      ? `Delete "${name}" and its ${nodeCount} node${nodeCount > 1 ? 's' : ''}? This cannot be undone.`
+      : `Delete "${name}"? This cannot be undone.`;
+    if (!confirm(msg)) return;
+    routes.splice(currentRouteIdx, 1);
+    const newIdx = Math.min(currentRouteIdx, routes.length - 1);
+    currentRouteIdx = -1;
+    currentNodeIdx = -1;
+    img = null;
+    FV.routes.rebuildRouteSelect();
+    if (routes.length > 0) {
+      FV.routes.selectRoute(newIdx);
+    } else {
+      document.getElementById('sidebarRouteBadge').textContent = 'NO ROUTE';
+      FV.nodes.buildSidebar(); drawMinimap(); FV.nodes.updateNodeCount(); clearViewer();
+      document.getElementById('welcome').classList.remove('hidden');
+    }
+    saveRoutes();
+  },
+
+  rebuildRouteSelect() {
+    const sel = document.getElementById('routeSelect');
+    sel.innerHTML = '';
+    if (!routes.length) { sel.innerHTML = '<option value="">— No routes yet —</option>'; return; }
+    routes.forEach((r, i) => {
+      const o = document.createElement('option');
+      o.value = i;
+      o.textContent = r.name + (r.nodes.length ? ` (${r.nodes.length})` : '');
+      sel.appendChild(o);
+    });
+    sel.value = currentRouteIdx >= 0 ? currentRouteIdx : 0;
+  },
+
+  selectRoute(idx) {
+    currentRouteIdx = idx; currentNodeIdx = -1; img = null;
+    FV.quiz.resetSession();
+    if (window._quizKeyHandler) { document.removeEventListener('keydown', window._quizKeyHandler); window._quizKeyHandler = null; }
+    document.getElementById('quizOverlay').style.display = 'none';
+    FV.session.reset();
+    mapSelectedNodeIdx = -1; mapConnectFirstNodeIdx = -1;
+    const route = currentRoute();
+    document.getElementById('sidebarRouteBadge').textContent = route ? route.name : 'NO ROUTE';
+    document.getElementById('routeSelect').value = idx;
+    FV.nodes.buildSidebar(); drawMinimap(); FV.nodes.updateNodeCount();
+    if (FV.sidebar && FV.sidebar.view === 'docs') buildDocList();
+    document.getElementById('overlay').style.opacity = '0';
+    document.getElementById('hotspots').style.opacity = '0';
+    clearViewer();
+    if (route && route.nodes.length > 0) navigateTo(0);
+  }
+};
+// Backward-compat shims
+function openNewRouteModal()  { FV.routes.openNewRouteModal(); }
+function confirmNewRoute()    { FV.routes.confirmNewRoute(); }
+function duplicateRoute()     { FV.routes.duplicateRoute(); }
+function deleteRoute()        { FV.routes.deleteRoute(); }
+function rebuildRouteSelect() { FV.routes.rebuildRouteSelect(); }
+function selectRoute(idx)     { FV.routes.selectRoute(idx); }
+
+// ══════════════════════════════════════════════════
+// SIDEBAR MODULE (FV.sidebar)
+// ══════════════════════════════════════════════════
+FV.sidebar = {
+  // ── State ──
+  open: true,
+  view: 'nodes',    // 'nodes' | 'docs'
+  docPanelOpen: false,
+
+  toggle() {
+    FV.sidebar.open = !FV.sidebar.open;
+    document.getElementById('sidebar').classList.toggle('collapsed', !FV.sidebar.open);
+    setTimeout(resizeCanvas, 260);
+  },
+
+  getSidebarWidthConstraints() {
+    const min = 200;
+    const max = Math.max(min, Math.min(720, window.innerWidth - 120));
+    return { min, max };
+  },
+
+  clampSidebarWidth(px) {
+    const { min, max } = FV.sidebar.getSidebarWidthConstraints();
+    return Math.min(max, Math.max(min, Math.round(px)));
+  },
+
+  setSidebarWidthPx(px, persist) {
+    const w = FV.sidebar.clampSidebarWidth(px);
+    document.documentElement.style.setProperty('--sidebar-w', w + 'px');
+    if (persist) {
+      try { localStorage.setItem('facilityview_sidebar_w', String(w)); } catch (e) { /* ignore */ }
+    }
+    return w;
+  },
+
+  applyStoredWidth() {
+    let px = 260;
+    try {
+      const raw = localStorage.getItem('facilityview_sidebar_w');
+      if (raw != null && raw !== '') {
+        const n = parseInt(raw, 10);
+        if (!Number.isNaN(n)) px = n;
+      }
+    } catch (e) { /* ignore */ }
+    FV.sidebar.setSidebarWidthPx(px, false);
+  },
+
+  initResize() {
+    FV.sidebar.applyStoredWidth();
+    const sidebarEl = document.getElementById('sidebar');
+    const handle = document.getElementById('sidebarResizeHandle');
+    if (!handle) return;
+    let dragActive = false, startX = 0, startW = 0;
+    function onMove(clientX) {
+      FV.sidebar.setSidebarWidthPx(startW + (clientX - startX), false);
+      resizeCanvas();
+    }
+    function endDrag() {
+      if (!dragActive) return;
+      dragActive = false;
+      sidebarEl.classList.remove('resizing');
+      const { min, max } = FV.sidebar.getSidebarWidthConstraints();
+      const cur = sidebarEl.getBoundingClientRect().width;
+      FV.sidebar.setSidebarWidthPx(Math.min(max, Math.max(min, cur)), true);
+      resizeCanvas();
+    }
+    handle.addEventListener('pointerdown', e => {
+      if (e.button != null && e.button !== 0) return;
+      if (sidebarEl.classList.contains('collapsed')) return;
+      e.preventDefault();
+      dragActive = true; startX = e.clientX; startW = sidebarEl.getBoundingClientRect().width;
+      sidebarEl.classList.add('resizing');
+      try { handle.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    });
+    handle.addEventListener('pointermove', e => { if (dragActive) onMove(e.clientX); });
+    handle.addEventListener('pointerup', e => {
+      if (dragActive) { try { handle.releasePointerCapture(e.pointerId); } catch (err) {} endDrag(); }
+    });
+    handle.addEventListener('pointercancel', e => {
+      if (dragActive) { try { handle.releasePointerCapture(e.pointerId); } catch (err) {} endDrag(); }
+    });
+    handle.addEventListener('dblclick', e => {
+      e.preventDefault();
+      if (sidebarEl.classList.contains('collapsed')) return;
+      FV.sidebar.setSidebarWidthPx(260, true);
+      resizeCanvas();
+    });
+    window.addEventListener('resize', () => {
+      const raw = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w').trim();
+      let n = parseFloat(raw);
+      if (Number.isNaN(n)) n = 260;
+      FV.sidebar.setSidebarWidthPx(n, false);
+      resizeCanvas();
+    });
+  },
+
+  switchView(mode) {
+    FV.sidebar.view = mode;
+    FV.sidebar.docPanelOpen = mode === 'docs';
+    if (!FV.sidebar.open) FV.sidebar.toggle();
+    document.getElementById('sidebarNodesView').style.display = mode === 'nodes' ? '' : 'none';
+    const docsEl = document.getElementById('sidebarDocsView');
+    docsEl.style.display = mode === 'docs' ? 'flex' : 'none';
+    document.getElementById('tabNodes').classList.toggle('active', mode === 'nodes');
+    document.getElementById('tabDocs').classList.toggle('active', mode === 'docs');
+    const btn = document.getElementById('btnDocs');
+    if (btn) btn.classList.toggle('hotspot-edit-active', mode === 'docs');
+    if (mode === 'docs') buildDocList();
+  },
+
+  toggleDocPanel() {
+    FV.sidebar.switchView(FV.sidebar.docPanelOpen ? 'nodes' : 'docs');
+  }
+};
+// Backward-compat shims
+function toggleSidebar()          { FV.sidebar.toggle(); }
+function switchSidebarView(mode)  { FV.sidebar.switchView(mode); }
+function toggleDocPanel()         { FV.sidebar.toggleDocPanel(); }
+function initSidebarResize()      { FV.sidebar.initResize(); }
 
 // ══════════════════════════════════════════════════
 // DEMO DATA
@@ -3852,7 +5014,7 @@ document.getElementById('hotspotFileInput').addEventListener('change', function(
   }
   const reader = new FileReader();
   reader.onload = ev => {
-    pendingHotspotFileData = { dataUrl: ev.target.result, filename: file.name };
+    FV.hotspots.pendingFileData = { dataUrl: ev.target.result, filename: file.name };
     document.getElementById('hotspotFileLabel').textContent = file.name;
   };
   reader.readAsDataURL(file);
@@ -3973,8 +5135,7 @@ document.addEventListener('keydown', e => {
 // ══════════════════════════════════════════════════
 // DOCUMENTS / SOP PANEL
 // ══════════════════════════════════════════════════
-let docPanelOpen = false;
-let sidebarView = 'nodes'; // 'nodes' | 'docs'
+// Sidebar view state — now managed by FV.sidebar module (see below)
 let _editingDocId = null;
 let _pendingDocFile = null;
 
@@ -4517,280 +5678,8 @@ document.addEventListener('mousedown', e => {
 });
 
 // ══════════════════════════════════════════════════
-// CUSTOM HOTSPOT FUNCTIONS
+// CUSTOM HOTSPOT FUNCTIONS — moved to FV.hotspots module; shims defined there
 // ══════════════════════════════════════════════════
-function toggleHotspotEditMode() {
-  if (!img) return;
-  hotspotEditMode = !hotspotEditMode;
-  canvas.classList.toggle('hotspot-edit-mode', hotspotEditMode);
-  document.getElementById('btnHotspotEdit').classList.toggle('hotspot-edit-active', hotspotEditMode);
-}
-function canvasClickToYawPitch(clientX, clientY) {
-  const rect = canvas.getBoundingClientRect();
-  const px = clientX - rect.left, py = clientY - rect.top;
-  const W = rect.width, H = rect.height;
-  const halfFovH = (fov * Math.PI / 180) / 2;
-  const halfFovV = halfFovH / (W / H);
-  return {
-    yaw:   yaw   + (px / W - 0.5) * 2 * halfFovH,
-    pitch: Math.max(-Math.PI/2.2, Math.min(Math.PI/2.2, pitch - (py / H - 0.5) * 2 * halfFovV))
-  };
-}
-function openAddHotspotModal(yawVal, pitchVal) {
-  editingHotspotId = null;
-  pendingHotspotYaw = yawVal; pendingHotspotPitch = pitchVal;
-  document.getElementById('hotspotLabel').value = '';
-  document.getElementById('hotspotContent').value = '';
-  document.getElementById('hotspotType').value = 'info';
-  document.getElementById('hotspotUrl').value = '';
-  document.getElementById('hotspotFileLabel').textContent = 'Click to upload image or PDF';
-  pendingHotspotFileData = null;
-  document.getElementById('hsQuizQText').value = '';
-  [0,1,2,3].forEach(i => { document.getElementById('hsQuizOpt' + i).value = ''; });
-  document.getElementById('hsQuizCorrectSelect').value = '0';
-  document.getElementById('hsQuizExplText').value = '';
-  selectHotspotIcon('info');
-  document.getElementById('hotspotColor').value = HOTSPOT_ICON_DEFAULTS.info;
-  document.getElementById('addHotspotSub').textContent =
-    `Yaw: ${Math.round(yawVal * 180 / Math.PI)}°  Pitch: ${Math.round(pitchVal * 180 / Math.PI)}°`;
-  document.querySelector('#modalAddHotspot .modal-title').textContent = 'Add Hotspot';
-  document.getElementById('confirmHotspotBtn').textContent = 'Add Hotspot';
-  // Populate link target dropdown
-  const sel = document.getElementById('hotspotLinkTarget');
-  sel.innerHTML = '';
-  currentNodes().forEach((n, i) => {
-    if (i === currentNodeIdx) return;
-    const o = document.createElement('option');
-    o.value = n.id; o.textContent = n.id + ': ' + n.name;
-    sel.appendChild(o);
-  });
-  updateHotspotTypeFields();
-  openModal('modalAddHotspot');
-  setTimeout(() => document.getElementById('hotspotLabel').focus(), 100);
-}
-function updateHotspotTypeFields() {
-  const type = document.getElementById('hotspotType').value;
-  document.getElementById('hotspotContentField').style.display = type === 'info'  ? '' : 'none';
-  document.getElementById('hotspotLinkField').style.display    = type === 'link'  ? '' : 'none';
-  document.getElementById('hotspotUrlField').style.display     = type === 'url'   ? '' : 'none';
-  document.getElementById('hotspotFileField').style.display    = (type === 'image' || type === 'file') ? '' : 'none';
-  document.getElementById('hotspotQuizField').style.display    = type === 'quiz'  ? '' : 'none';
-  document.getElementById('hotspotIconField').style.display    = (type === 'link' || type === 'quiz') ? 'none' : '';
-  // Auto-select the icon that matches the type when switching types
-  const typeIconMap = { url: 'external', image: 'image', file: 'document', quiz: 'quiz' };
-  if (typeIconMap[type]) selectHotspotIcon(typeIconMap[type]);
-}
-function selectHotspotIcon(icon) {
-  document.querySelectorAll('.hs-icon-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.icon === icon));
-  document.getElementById('hotspotColor').value = HOTSPOT_ICON_DEFAULTS[icon] || '#00c8ff';
-}
-function resetHotspotColor() {
-  const activeBtn = document.querySelector('.hs-icon-btn.active');
-  const icon = activeBtn ? activeBtn.dataset.icon : 'info';
-  document.getElementById('hotspotColor').value = HOTSPOT_ICON_DEFAULTS[icon] || '#00c8ff';
-}
-function resetNavArrowColor() {
-  document.getElementById('navArrowColorInput').value = '#f0a500';
-}
-function confirmAddHotspot() {
-  const label = document.getElementById('hotspotLabel').value.trim();
-  if (!label) { document.getElementById('hotspotLabel').focus(); return; }
-  const type = document.getElementById('hotspotType').value;
-  let content = '', filename = null;
-  if (type === 'info')       content = document.getElementById('hotspotContent').value.trim();
-  else if (type === 'link')  content = document.getElementById('hotspotLinkTarget').value;
-  else if (type === 'url')   content = document.getElementById('hotspotUrl').value.trim();
-  else if (type === 'image' || type === 'file') {
-    if (pendingHotspotFileData) { content = pendingHotspotFileData.dataUrl; filename = pendingHotspotFileData.filename; }
-    else if (editingHotspotId) {
-      // Keep existing file if no new one was uploaded
-      const existingHs = (currentNodes()[currentNodeIdx]?.hotspots || []).find(h => h.id === editingHotspotId);
-      if (existingHs) { content = existingHs.content; filename = existingHs.filename || null; }
-    }
-  }
-  let hsQuiz = null;
-  if (type === 'quiz') {
-    const qText = document.getElementById('hsQuizQText').value.trim();
-    const opts = [0,1,2,3].map(i => document.getElementById('hsQuizOpt' + i).value.trim());
-    const correctIdx = parseInt(document.getElementById('hsQuizCorrectSelect').value) || 0;
-    const explanation = document.getElementById('hsQuizExplText').value.trim();
-    if (!qText || opts.some(o => !o)) { alert('Please fill in the question and all four options.'); return; }
-    hsQuiz = { question: qText, options: opts, correctIndex: correctIdx, explanation };
-  }
-  if ((type === 'url') && !content) { document.getElementById('hotspotUrl').focus(); return; }
-  if ((type === 'image' || type === 'file') && !content) { alert('Please upload a file.'); return; }
-  const activeIconBtn = document.querySelector('.hs-icon-btn.active');
-  const icon = activeIconBtn ? activeIconBtn.dataset.icon : (type === 'link' ? 'link' : type === 'quiz' ? 'quiz' : 'info');
-  const pickedColor = document.getElementById('hotspotColor').value;
-  const defaultColor = HOTSPOT_ICON_DEFAULTS[icon] || '#00c8ff';
-  const color = pickedColor.toLowerCase() !== defaultColor.toLowerCase() ? pickedColor : null;
-  const node = currentNodes()[currentNodeIdx];
-  if (!node) return;
-  node.hotspots = node.hotspots || [];
-  if (editingHotspotId) {
-    const hs = node.hotspots.find(h => h.id === editingHotspotId);
-    if (hs) { hs.type = type; hs.icon = icon; hs.color = color; hs.label = label; hs.content = content; hs.filename = filename; hs.quiz = hsQuiz; }
-    editingHotspotId = null;
-    closeModal('modalAddHotspot');
-    buildHotspots(currentNodeIdx);
-    saveRoutes();
-    openManageHotspotsModal();
-  } else {
-    node.hotspots.push({ id: uid('HS'), type, icon, color, filename, yaw: pendingHotspotYaw, pitch: pendingHotspotPitch, label, content, quiz: hsQuiz });
-    pendingHotspotFileData = null;
-    closeModal('modalAddHotspot');
-    buildHotspots(currentNodeIdx);
-    saveRoutes();
-  }
-}
-function cancelHotspotModal() {
-  const wasEditing = !!editingHotspotId;
-  editingHotspotId = null;
-  closeModal('modalAddHotspot');
-  if (wasEditing) openManageHotspotsModal();
-}
-function deleteHotspot(nodeIdx, hotspotId) {
-  const node = currentNodes()[nodeIdx]; if (!node) return;
-  node.hotspots = (node.hotspots || []).filter(h => h.id !== hotspotId);
-  buildHotspots(currentNodeIdx);
-  saveRoutes();
-}
-function openManageHotspotsModal() {
-  const node = currentNodes()[currentNodeIdx];
-  document.getElementById('manageHotspotNodeName').textContent = node ? node.name : '—';
-  buildHotspotManageList();
-  openModal('modalManageHotspots');
-}
-function buildHotspotManageList() {
-  const node = currentNodes()[currentNodeIdx];
-  const list = document.getElementById('hotspotManageList');
-  const hotspots = (node && node.hotspots) ? node.hotspots : [];
-  if (!hotspots.length) {
-    list.innerHTML = '<div style="padding:20px 0;font-family:var(--mono);font-size:10px;color:var(--muted);letter-spacing:1px;text-align:center;">No hotspots on this node yet.</div>';
-    return;
-  }
-  list.innerHTML = '';
-  hotspots.forEach(hs => {
-    const row = document.createElement('div');
-    row.style.cssText = 'display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:1px solid var(--border);';
-    const resolvedIcon = hs.icon || (hs.type === 'link' ? 'link' : 'info');
-    const listPinColor = hs.color || HOTSPOT_ICON_DEFAULTS[resolvedIcon] || '#00c8ff';
-    const listIconSvg = HOTSPOT_ICONS[resolvedIcon] || HOTSPOT_ICONS.info;
-    const listIcon = listIconSvg.replace('<svg ', `<svg width="14" height="14" fill="${listPinColor}" style="flex-shrink:0" `);
-    const badgeColor = hs.type === 'info' ? 'rgba(0,200,255,0.12)' : hs.type === 'quiz' ? 'rgba(224,64,251,0.12)' : 'rgba(0,230,118,0.12)';
-    const badgeText = hs.type === 'info' ? 'var(--accent2)' : hs.type === 'quiz' ? '#e040fb' : 'var(--success)';
-    const previewText = hs.type === 'info'   ? (hs.content || '—')
-      : hs.type === 'link'   ? ('→ ' + (currentNodes().find(n => n.id === hs.content) || {name: hs.content}).name)
-      : hs.type === 'url'    ? (hs.content || '—')
-      : hs.type === 'image'  ? ('🖼 ' + (hs.filename || 'Image'))
-      : hs.type === 'file'   ? ('📄 ' + (hs.filename || 'Document'))
-      : hs.type === 'quiz'   ? ('❓ ' + (hs.quiz ? hs.quiz.question : '—'))
-      : '—';
-    row.innerHTML = `
-      ${listIcon}
-      <div style="flex:1;min-width:0;">
-        <div style="font-family:var(--cond);font-size:13px;font-weight:700;color:#fff;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(hs.label)}</div>
-        <div style="font-family:var(--mono);font-size:9px;color:var(--muted);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(previewText)}</div>
-      </div>
-      <span style="font-family:var(--mono);font-size:8px;letter-spacing:1px;padding:2px 5px;border-radius:2px;background:${badgeColor};color:${badgeText};flex-shrink:0;">${hs.type.toUpperCase()}</span>
-      <button class="loc-action-btn" title="Edit" data-hsid="${hs.id}" data-action="edit">
-        <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
-      </button>
-      <button class="loc-action-btn" title="Reposition" data-hsid="${hs.id}" data-action="reposition">
-        <svg viewBox="0 0 24 24"><path d="M12 8c-2.21 0-4 1.79-4 4s1.79 4 4 4 4-1.79 4-4-1.79-4-4-4zm8.94 3A8.994 8.994 0 0 0 13 3.06V1h-2v2.06A8.994 8.994 0 0 0 3.06 11H1v2h2.06A8.994 8.994 0 0 0 11 20.94V23h2v-2.06A8.994 8.994 0 0 0 20.94 13H23v-2h-2.06z"/></svg>
-      </button>
-      <button class="loc-action-btn danger" title="Delete" data-hsid="${hs.id}" data-action="delete">
-        <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
-      </button>`;
-    list.appendChild(row);
-  });
-  // single delegated listener
-  list.onclick = e => {
-    const btn = e.target.closest('[data-action]');
-    if (!btn) return;
-    const { hsid, action } = btn.dataset;
-    if (action === 'edit') openEditHotspotModal(hsid);
-    else if (action === 'reposition') startRepositionHotspot(hsid);
-    else if (action === 'delete') { if (confirm('Delete this hotspot?')) { deleteHotspot(currentNodeIdx, hsid); buildHotspotManageList(); } }
-  };
-}
-function openEditHotspotModal(hsId) {
-  const node = currentNodes()[currentNodeIdx];
-  if (!node) return;
-  const hs = (node.hotspots || []).find(h => h.id === hsId);
-  if (!hs) return;
-  editingHotspotId = hsId;
-  pendingHotspotYaw = hs.yaw; pendingHotspotPitch = hs.pitch;
-  document.getElementById('hotspotLabel').value = hs.label;
-  document.getElementById('hotspotContent').value = hs.type === 'info' ? (hs.content || '') : '';
-  document.getElementById('hotspotType').value = hs.type;
-  document.getElementById('hotspotUrl').value = hs.type === 'url' ? (hs.content || '') : '';
-  if (hs.type === 'image' || hs.type === 'file') {
-    pendingHotspotFileData = hs.content ? { dataUrl: hs.content, filename: hs.filename || 'file' } : null;
-    document.getElementById('hotspotFileLabel').textContent = hs.filename || (hs.content ? 'File attached — click to replace' : 'Click to upload image or PDF');
-  } else {
-    pendingHotspotFileData = null;
-    document.getElementById('hotspotFileLabel').textContent = 'Click to upload image or PDF';
-  }
-  // Populate quiz fields if editing a quiz hotspot
-  if (hs.type === 'quiz' && hs.quiz) {
-    document.getElementById('hsQuizQText').value = hs.quiz.question || '';
-    [0,1,2,3].forEach(i => { document.getElementById('hsQuizOpt' + i).value = hs.quiz.options[i] || ''; });
-    document.getElementById('hsQuizCorrectSelect').value = hs.quiz.correctIndex ?? 0;
-    document.getElementById('hsQuizExplText').value = hs.quiz.explanation || '';
-  } else {
-    document.getElementById('hsQuizQText').value = '';
-    [0,1,2,3].forEach(i => { document.getElementById('hsQuizOpt' + i).value = ''; });
-    document.getElementById('hsQuizCorrectSelect').value = '0';
-    document.getElementById('hsQuizExplText').value = '';
-  }
-  const editIcon = hs.icon || (hs.type === 'link' ? 'link' : hs.type === 'url' ? 'external' : hs.type === 'image' ? 'image' : hs.type === 'file' ? 'document' : hs.type === 'quiz' ? 'quiz' : 'info');
-  selectHotspotIcon(editIcon);
-  document.getElementById('hotspotColor').value = hs.color || HOTSPOT_ICON_DEFAULTS[editIcon] || '#00c8ff';
-  // populate link target select and pre-select current target
-  const sel = document.getElementById('hotspotLinkTarget');
-  sel.innerHTML = '';
-  currentNodes().forEach((n, i) => {
-    if (i === currentNodeIdx) return;
-    const o = document.createElement('option');
-    o.value = n.id; o.textContent = n.id + ': ' + n.name;
-    if (n.id === hs.content) o.selected = true;
-    sel.appendChild(o);
-  });
-  updateHotspotTypeFields();
-  document.getElementById('addHotspotSub').textContent = `Editing: ${hs.label}`;
-  document.querySelector('#modalAddHotspot .modal-title').textContent = 'Edit Hotspot';
-  document.getElementById('confirmHotspotBtn').textContent = 'Save Changes';
-  closeModal('modalManageHotspots');
-  openModal('modalAddHotspot');
-  setTimeout(() => document.getElementById('hotspotLabel').focus(), 100);
-}
-function startRepositionHotspot(hsId) {
-  if (!img) return;
-  if (repositioningHotspotId) repositioningHotspotId = null; // cancel any in-progress reposition
-  repositioningHotspotId = hsId;
-  closeModal('modalManageHotspots');
-  hotspotEditMode = true;
-  canvas.classList.add('hotspot-edit-mode');
-  document.getElementById('btnHotspotEdit').classList.add('hotspot-edit-active');
-}
-function showHotspotInfo(hs) {
-  document.getElementById('hotspotInfoTitle').textContent = hs.label;
-  document.getElementById('hotspotInfoText').textContent  = hs.content;
-  document.getElementById('hotspotInfoPopup').style.display = 'block';
-}
-function showHotspotImage(hs) {
-  const src = hs.content || '';
-  if (src && !isSafeImageSrc(src)) return;
-  document.getElementById('lightboxImg').src = src;
-  document.getElementById('lightboxImg').alt = hs.label || 'Hotspot image';
-  document.getElementById('lightboxTitle').textContent = hs.label + (hs.filename ? ' — ' + hs.filename : '');
-  document.getElementById('hotspotLightbox').classList.add('open');
-}
-function closeLightbox() {
-  document.getElementById('hotspotLightbox').classList.remove('open');
-  document.getElementById('lightboxImg').src = '';
-}
 
 // ══════════════════════════════════════════════════
 // WEBGL RENDERER INIT

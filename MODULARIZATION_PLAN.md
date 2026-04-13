@@ -2,7 +2,7 @@
 
 Incremental extraction of `virtual-tour.html` (~4900 lines, ~120 global functions) into namespaced modules under a single `FV` object. Each module is independently extractable and testable. No build step — the app runs via `file://`, so ES modules are not used; instead modules are namespace objects within the existing inline `<script>`.
 
-**Branch:** `claude/plan-app-modularization-cxXHQ`
+**Branch:** `claude/plan-next-steps-aUlqO`
 **Tests:** `npx vitest run` — must stay 149/149 green after each extraction.
 
 ---
@@ -42,7 +42,7 @@ FV.moduleName = {
 
 ## Progress
 
-### ✅ Completed (7 / 17)
+### ✅ Completed (11 / 17)
 
 | # | Module | Commit | Notes |
 |---|--------|--------|-------|
@@ -53,17 +53,17 @@ FV.moduleName = {
 | 5 | `FV.persistence` | `3b01f37` | IndexedDB, save/load, import/export, sanitize, viewer package. State: `db`, `_saveTimeout`. Added `_reconstructRoute()` helper (deduplicated load/loadFromBaked). **Global shim:** `saveRoutes()` retained — ~30 callsites |
 | 6 | `FV.modals` | `f622db2` | `open(id)`, `close(id)` one-liners. Shims: `openModal`, `closeModal` |
 | 7 | `FV.connections` | `ec18b83` | Bidirectional graph CRUD: `add`, `remove`, `removeAll`, `toggle`. Refactored 5 callers + map-editor connect tool to delegate. Pure version still in `virtual-tour-utils.js` for tests |
+| 8 | `FV.hotspots` | `6d0bb3c` | Hotspot DOM build/position, nav arrow drag, custom hotspot CRUD modals, manage panel, lightbox, info popup, reposition mode, helper arrows. State: `editMode`, `pendingYaw/Pitch`, `editingId`, `repositioningId`, `pendingFileData` |
+| 9 | `FV.nodes` | `74b03c5` | Node CRUD, add/rename/delete/duplicate modals, sidebar build+drag-reorder, thumbnail generation, connection modal, filterSidebar. State: `pendingNodeImage`, `renameTargetIdx` |
+| 10 | `FV.routes` | `f690715` | Route CRUD, selection, duplication. No owned state. |
+| 11 | `FV.sidebar` | `f690715` | Toggle, drag-resize, tab switching (nodes/docs), docPanel. State: `open`, `view`, `docPanelOpen` |
 
-### ⏳ Remaining (10 / 17)
+### ⏳ Remaining (6 / 17)
 
 In recommended extraction order (safest dependencies first):
 
 | # | Module | Description | Key state | Key functions | Depends on |
 |---|--------|-------------|-----------|---------------|------------|
-| 8 | `FV.hotspots` | Hotspot DOM building, positioning, edit mode, CRUD, lightbox | `editMode`, `pendingYaw`, `pendingPitch`, `editingId`, `repositioningId` | `buildHotspots`, `updateHotspotPositions`, `toggleHotspotEditMode`, `canvasClickToYawPitch`, `openAddHotspotModal`, `confirmAddHotspot`, `deleteHotspot`, `openManageHotspotsModal`, `buildHotspotManageList`, `openEditHotspotModal`, `startRepositionHotspot`, `showHotspotInfo`, `showHotspotImage`, `closeLightbox`, `selectHotspotIcon`, `resetHotspotColor`, `resetNavArrowColor`, `updateHotspotTypeFields` | `FV.modals`, `FV.persistence` |
-| 9 | `FV.nodes` | Node CRUD, rename modal, reorder, thumbnails | `pendingNodeImage`, `renameTargetIdx` | `openRenameModal`, `confirmRenameNode`, `deleteNode`, `getThumbnail`, `reorderNode`, `removeNodeImage`, add-node modal flow | `FV.connections`, `FV.modals`, `FV.persistence` |
-| 10 | `FV.routes` | Route CRUD | (none owned) | `openNewRouteModal`, `confirmNewRoute`, `deleteRoute`, `duplicateRoute`, `rebuildRouteSelect`, `selectRoute` | `FV.nodes`, `FV.persistence`, `FV.quiz` (resets), `FV.session` |
-| 11 | `FV.sidebar` | Sidebar tabs, resize, node list | `sidebarOpen`, `sidebarView` | `buildSidebar`, `switchSidebarView`, `toggleDocPanel`, sidebar drag-resize | `FV.nodes`, `FV.navigation` |
 | 12 | `FV.minimap` | Minimap drawing, minimize toggle | `minimapMinimized` | `drawMinimap`, `toggleMinimapMinimize`, `toMM()` | reads route/node state |
 | 13 | `FV.mapEditor` | Largest module — canvas, tools, undo/redo, floor tabs | `mapTool`, `mapSelectedNodeIdx`, `mapDraggingNodeIdx`, `mapConnectFirstNodeIdx`, `mapDragOffX/Y`, `mapCurrentFloorId`, `mapEditorOpen`, `mapUndoStack`, `mapRedoStack` | `openMapEditor`, `closeMapEditor`, `setTool`, `buildEditorNodeList`, `drawMapEditor`, mouse handlers, `mapSnapshot`, `applySnapshot`, `pushUndo`, `mapUndo`, `mapRedo`, `buildFloorTabs`, `switchFloor`, `addFloor`, `deleteFloor`, `startFloorRename`, `assignNodeFloor`, `clearFloorplan`, floorplan upload | `FV.connections`, `FV.minimap`, `FV.persistence` |
 | 14 | `FV.viewer` | WebGL/2D rendering pipeline, crossfade | `gl`, `ctx`, `useWebGL`, `glProgram`, `glTexture`, `glYawLoc`, `glPitchLoc`, `glFovLoc`, `glResLoc`, `img`, `renderPending`, `isFading`, `fadeTimeout`, `lastCompassDeg` | `initWebGL`, `renderFrame`, `scheduleRender`, `clearViewer`, `resizeCanvas`, `updateHUD`, crossfade logic | (foundation — minimal deps) |
@@ -104,15 +104,6 @@ mapConnectFirstNodeIdx, mapDragOffX, mapDragOffY,
 mapCurrentFloorId, mapEditorOpen,
 mapUndoStack, mapRedoStack                     → FV.mapEditor
 
-// Hotspot editing
-hotspotEditMode, pendingHotspotYaw, pendingHotspotPitch,
-editingHotspotId, repositioningHotspotId       → FV.hotspots
-
-// Node editing
-pendingNodeImage, renameTargetIdx              → FV.nodes
-
-// Sidebar
-sidebarOpen, sidebarView                       → FV.sidebar
 ```
 
 ---
@@ -134,7 +125,7 @@ sidebarOpen, sidebarView                       → FV.sidebar
 - [ ] `git diff` reviewed for unintended changes
 - [ ] No new ESLint/console errors (manual browser check if practical)
 - [ ] Commit with descriptive message
-- [ ] Push to `claude/plan-app-modularization-cxXHQ`
+- [ ] Push to `claude/plan-next-steps-aUlqO`
 - [ ] Update this file's "Completed" table with commit hash
 
 ---
@@ -150,4 +141,4 @@ sidebarOpen, sidebarView                       → FV.sidebar
 7. Follow the Migration Pattern above.
 8. Commit + push + update this file.
 
-**Current next step:** Extract `FV.hotspots` (Step 8). Target lines ~3290–3560 in `virtual-tour.html` (per CLAUDE.md File Layout — verify before editing as line numbers shift with each extraction).
+**Current next step:** Extract `FV.minimap` (Step 12). Key functions: `drawMinimap`, `toggleMinimapMinimize`, `toMM()` helper. State: `minimapMinimized` (currently not a bare global — check implementation).

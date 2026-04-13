@@ -12,7 +12,7 @@ Always use jCodemunch-MCP tools — never fall back to Read, Grep, Glob, or Bash
 ## Project Overview
 FacilityView is a single-file HTML/CSS/JS virtual tour simulator for facility worker training. Users upload equirectangular panorama images, link them into named routes, and navigate between them in a Google Street View-style viewer.
 
-**The entire app lives in one file:** `virtual-tour.html` (~3,680 lines)
+**The entire app lives in one file:** `virtual-tour.html` (~5,883 lines)
 
 ---
 
@@ -20,29 +20,30 @@ FacilityView is a single-file HTML/CSS/JS virtual tour simulator for facility wo
 
 | Lines | Content |
 |---|---|
-| 1–420 | `<head>`: CSS styles (incl. sidebar tabs, floor tabs, hotspot icon types, quiz overlay, quiz score modal, quiz editor) |
-| 420–680 | HTML: header (incl. #btnQuizResults), sidebar (tabs: Nodes/Docs views), viewer (incl. #quizOverlay), map editor overlay |
-| 680–900 | HTML: modals (add route, add node, edit node with connections+nav arrow color+quiz editor, hotspots, manage hotspots, quiz score #modalQuizScore) |
-| 900–990 | `<script>` open + all JS global state declarations + `HOTSPOT_ICONS`/`HOTSPOT_ICON_DEFAULTS` constants |
-| 990–1000 | Helper functions: `currentRoute()`, `currentNodes()` |
-| 1000–1080 | Route management: `openNewRouteModal`, `confirmNewRoute`, `deleteRoute`, `duplicateRoute`, `rebuildRouteSelect`, `selectRoute` |
-| 1080–1430 | Node management: `openRenameModal`, `refreshModalConnections`, `addConnectionFromModal`, `removeConnectionFromModal`, `removeAllConnectionsFromModal`, `confirmRenameNode`, `deleteNode`, `getThumbnail`, `buildSidebar`, `reorderNode` |
-| 1430–1510 | Navigation: `navigateTo`, `navigatePrev/Next`, `updateHeaders`, `updateRouteProgress` |
-| 1510–1620 | Canvas/rendering utils: `resizeCanvas`, `clearViewer`, `renderFrame`, `scheduleRender`, `updateHUD` |
-| 1620–1740 | Hotspot DOM: `buildHotspots`, `updateHotspotPositions` |
-| 1740–1940 | Minimap: `toggleMinimapMinimize`, `drawMinimap` (incl. cross-floor ghost nodes) |
-| 1940–2530 | Map editor: `openMapEditor`, `closeMapEditor`, undo/redo helpers, `setTool`, `buildEditorNodeList`, floor tab functions, `removeConnection`, `removeAllConnections`, `drawMapEditor`, mouse/click handlers |
-| 2530–2670 | Floorplan upload: `clearFloorplan`, undo/redo keyboard listener |
-| 2670–2710 | View controls: `adjustFov`, `resetView`, `toggleFullscreen`, `openModal`, `closeModal` |
-| 2710–2790 | Demo panoramas: `makeSyntheticPanorama`, `loadDemo` |
-| 2790–2890 | IndexedDB: `openDB`, `saveRoutes`, `loadRoutes`, `flashSavedIndicator` |
-| 2890–3000 | Viewer package + Export/Import: `serializeRoutesForExport`, `loadFromBaked`, `exportViewerPackage`, `exportRoutes`, `importRoutes` |
-| 3000–3040 | Settings & inertia: `toggleSettings`, `updateSensitivity`, `startInertia` |
-| 3040–3130 | Kiosk mode: `enterKioskMode`, `exitKioskMode`, `setKioskAuto`, `setKioskInterval`, `startKioskTimer`, `stopKioskTimer` |
-| 3130–3290 | Quiz mode: `checkNodeQuiz`, `showQuizQuestion`, `submitQuizAnswer`, `closeQuizOverlay`, `showQuizScore`, `resetQuizSession`, `toggleQuizEditor` |
-| 3290–3560 | Custom hotspot CRUD: `toggleHotspotEditMode`, `canvasClickToYawPitch`, `openAddHotspotModal`, `updateHotspotTypeFields`, `selectHotspotIcon`, `resetHotspotColor`, `resetNavArrowColor`, `confirmAddHotspot`, `deleteHotspot`, `openManageHotspotsModal`, `buildHotspotManageList`, `openEditHotspotModal`, `startRepositionHotspot`, `showHotspotInfo`, `showHotspotImage`, `closeLightbox` |
-| 3560–3620 | WebGL init: `initWebGL` (shaders, texture setup, fallback) |
-| 3620–3669 | App init: `showLoader`, `hideLoader`, `init` |
+| 1–1236 | `<head>` CSS + all HTML (header, sidebar, viewer, modals incl. quiz, session log, kiosk) |
+| 1237–1329 | `<script>` open + bare-global state declarations + `HOTSPOT_ICONS`/`HOTSPOT_ICON_DEFAULTS` constants |
+| 1330–1668 | Helper functions: `currentRoute()`, `currentNodes()`; event listeners (keyboard, add-node file input, route select) |
+| 1669–1988 | Connection modal handlers; node image upload handlers; misc raw global code |
+| 1989–2080 | Navigation: `navigateTo`, `navigatePrev/Next`, `updateHeaders`, `updateRouteProgress` |
+| 2081–2334 | Canvas/rendering: `resizeCanvas`, `clearViewer`, `renderFrame`, `scheduleRender`, `updateHUD`; hotspot stub (overridden by FV.hotspots shims) |
+| 2335–2447 | Old `updateHotspotPositions`, `updateHelperArrows` implementations (dead code — overridden by FV.hotspots shims below) |
+| 2448–2648 | Minimap: `toggleMinimapMinimize`, `drawMinimap` (incl. cross-floor ghost nodes) |
+| 2649–3187 | Map editor: `openMapEditor`, `closeMapEditor`, undo/redo helpers, `setTool`, `buildEditorNodeList`, floor tab functions, `drawMapEditor`, mouse/click handlers |
+| 3188–3353 | Floorplan upload: `clearFloorplan`; view controls: `adjustFov`, `resetView`, `toggleFullscreen`; old shim stubs |
+| 3354–3431 | **FV.modals** module + **FV.connections** module |
+| 3432–3989 | **FV.hotspots** module + shims (`buildHotspots`, `updateHotspotPositions`, `toggleHotspotEditMode`, etc.) |
+| 3990–4367 | **FV.nodes** module + shims (`openRenameModal`, `confirmRenameNode`, `deleteNode`, `buildSidebar`, `reorderNode`, etc.) |
+| 4368–4482 | **FV.routes** module + shims (`openNewRouteModal`, `confirmNewRoute`, `deleteRoute`, `rebuildRouteSelect`, `selectRoute`) |
+| 4483–4600 | **FV.sidebar** module + shims (`toggleSidebar`, `switchSidebarView`, `toggleDocPanel`, `initSidebarResize`) |
+| 4601–4673 | Demo panoramas: `makeSyntheticPanorama`, `loadDemo` |
+| 4674–5026 | **FV.persistence** module + shims (`openDB`, `saveRoutes`, `loadRoutes`, `exportRoutes`, `importRoutes`, etc.) |
+| 5027–5064 | **FV.settings** module + shims (`toggleSettings`, `updateSensitivity`) |
+| 5065–5397 | **FV.kiosk** module + shims (`enterKioskMode`, `exitKioskMode`, `setKioskAuto`, etc.) |
+| 5398–5581 | **FV.quiz** module + shims (`checkNodeQuiz`, `showQuizQuestion`, `submitQuizAnswer`, `showQuizScore`, etc.) |
+| 5582–5686 | **FV.session** module (training log, CSV export) |
+| 5687–5774 | WebGL init: `initWebGL` (shaders, texture setup, fallback) |
+| 5775–5842 | App startup: `showLoader`, `hideLoader` |
+| 5843–5883 | `init()` async entry point + call |
 
 ---
 
@@ -162,26 +163,37 @@ routes[] = [{
 
 ## State Variables (JS globals)
 
+**Bare globals (still to be claimed by future modules):**
+
 ```js
-// Core data
+// Core data — → FV.navigation (not yet extracted)
 routes[]                // all route data
 currentRouteIdx         // index into routes[]
 currentNodeIdx          // index into currentRoute().nodes
 
-// Viewer state
+// Viewer pose — → FV.viewer / FV.navigation (not yet extracted)
 yaw, pitch, fov         // viewer orientation (radians / degrees)
 img                     // current panorama Image object (null if none)
-isDragging              // true while mouse/touch dragging
-lastX, lastY            // last drag position for delta calculation
-mouseDownX, mouseDownY  // drag start (used to distinguish click vs drag)
 renderPending           // true if a rAF render is already queued
 isFading, fadeTimeout   // crossfade animation state
 
-// Node editing
-pendingNodeImage        // Image staged in Add Node modal (null after confirm)
-renameTargetIdx         // node index being edited in Edit Node modal
+// Input/inertia — → FV.input (not yet extracted)
+isDragging              // true while mouse/touch dragging
+lastX, lastY            // last drag position for delta calculation
+mouseDownX, mouseDownY  // drag start (used to distinguish click vs drag)
+velX, velY              // current inertia velocity (rad/frame)
+inertiaId               // rAF handle for inertia loop
+pinchStartDist          // pixel distance between fingers at pinch start
+pinchStartFov           // fov value at pinch start
 
-// Map editor
+// WebGL — → FV.viewer (not yet extracted)
+gl, ctx                 // WebGL context (preferred) / 2D fallback context
+useWebGL                // true if WebGL initialized successfully
+glProgram, glTexture    // compiled shader program and texture handle
+glYawLoc, glPitchLoc, glFovLoc, glResLoc  // uniform locations
+lastCompassDeg          // accumulated compass rotation (unwrapped)
+
+// Map editor — → FV.mapEditor (not yet extracted)
 mapTool                 // 'place' | 'move' | 'connect'
 mapSelectedNodeIdx      // selected node in editor (-1 = none)
 mapDraggingNodeIdx      // node being dragged in editor (-1 = none)
@@ -191,42 +203,20 @@ mapCurrentFloorId       // string ID of floor being viewed/edited (null = none)
 mapEditorOpen           // true when map editor overlay is visible
 mapUndoStack            // array of position/connection snapshots (capped at 50)
 mapRedoStack            // array of redoable snapshots
-
-// Hotspot editing
-hotspotEditMode         // true when placing a new hotspot (crosshair cursor)
-pendingHotspotYaw/Pitch // coords captured on canvas click for new hotspot
-editingHotspotId        // null = new hotspot; string = editing existing
-repositioningHotspotId  // null = normal; string = reposition click in progress
-
-// Settings & inertia
-sensitivityLevel        // 1–10 (default 3); scales drag → yaw/pitch delta
-inertiaEnabled          // boolean toggle
-velX, velY              // current inertia velocity (rad/frame)
-inertiaId               // rAF handle for inertia loop
-settingsOpen            // true when settings panel is visible
-
-// Pinch-to-zoom (touch)
-pinchStartDist          // pixel distance between fingers at pinch start
-pinchStartFov           // fov value at pinch start
-
-// Compass
-lastCompassDeg          // accumulated compass rotation (unwrapped) to prevent CSS spin-back at 0°/360°
-
-// WebGL
-gl, ctx                 // WebGL context (preferred) / 2D fallback context
-useWebGL                // true if WebGL initialized successfully
-glProgram, glTexture    // compiled shader program and texture handle
-glYawLoc, glPitchLoc, glFovLoc, glResLoc  // uniform locations
-
-// Quiz session
-quizAnswered            // nodeId → { selectedIdx, correct, correctIdx } — resets on selectRoute
-quizResultsShown        // true after score modal auto-shown; prevents double-show per session
-
-// Other
-db                      // IndexedDB handle
-sidebarOpen             // true when sidebar is expanded
-sidebarView             // 'nodes' | 'docs' — which tab is active in the sidebar
 ```
+
+**State now owned by FV modules (access via module property):**
+
+| Module | Properties |
+|--------|-----------|
+| `FV.hotspots` | `editMode`, `pendingYaw`, `pendingPitch`, `editingId`, `repositioningId`, `pendingFileData` |
+| `FV.nodes` | `pendingNodeImage`, `renameTargetIdx` |
+| `FV.sidebar` | `open`, `view`, `docPanelOpen` |
+| `FV.settings` | `sensitivity`, `inertiaEnabled`, `helperArrowsEnabled`, `open` |
+| `FV.persistence` | `db`, `_saveTimeout` |
+| `FV.quiz` | `answered`, `resultsShown` |
+| `FV.kiosk` | `active`, `auto`, `intervalSec`, `timerId` |
+| `FV.session` | `log`, `startTime` |
 
 ---
 
