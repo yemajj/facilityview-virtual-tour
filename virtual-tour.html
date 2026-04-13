@@ -1250,8 +1250,7 @@ let yaw = 0, pitch = 0, fov = 75;
 let isDragging = false, lastX = 0, lastY = 0;
 let mouseDownX = 0, mouseDownY = 0;
 let img = null, renderPending = false;
-let pendingNodeImage = null;
-let renameTargetIdx  = -1;
+// Node editing state — now managed by FV.nodes module (see below)
 
 // Map editor state
 let mapTool = 'place';            // 'place' | 'move' | 'connect'
@@ -1586,12 +1585,12 @@ document.getElementById('fileInput').addEventListener('change', e => {
     reader.onload = ev => {
       const image = new Image();
       image.onload = () => {
-        pendingNodeImage = image;
+        FV.nodes.pendingNodeImage = image;
         document.getElementById('nodeFileLabel').textContent = file.name;
         document.getElementById('confirmNodeBtn').disabled = false;
       };
       image.onerror = () => {
-        pendingNodeImage = null;
+        FV.nodes.pendingNodeImage = null;
         document.getElementById('nodeFileLabel').textContent = 'Choose image file...';
         document.getElementById('confirmNodeBtn').disabled = true;
         alert('Failed to load image. The file may be corrupt or unsupported.');
@@ -1754,13 +1753,13 @@ document.getElementById('nodeImageInput').addEventListener('change', e => {
     const image = new Image();
     image.onload = () => {
       hideLoader();
-      const node = currentNodes()[renameTargetIdx]; if (!node) return;
+      const node = currentNodes()[FV.nodes.renameTargetIdx]; if (!node) return;
       node.image = image;
-      node.thumbUrl = null; // reset cached thumbnail
+      node.thumbUrl = null;
       document.getElementById('renameNodeImageLabel').textContent = 'Image attached — click to replace';
       document.getElementById('btnRemoveNodeImage').style.display = '';
-      if (renameTargetIdx === currentNodeIdx) { img = image; renderFrame(); }
-      buildSidebar();
+      if (FV.nodes.renameTargetIdx === currentNodeIdx) { img = image; renderFrame(); }
+      FV.nodes.buildSidebar();
       saveRoutes();
     };
     image.onerror = () => { hideLoader(); alert('Failed to load image. The file may be corrupt or unsupported.'); };
@@ -3984,6 +3983,384 @@ function confirmAddHotspot()        { FV.hotspots.confirmAdd(); }
 function deleteHotspot(idx, id)     { FV.hotspots.delete(idx, id); }
 function openAddHotspotModal(y, p)  { FV.hotspots.openAddModal(y, p); }
 function canvasClickToYawPitch(x,y) { return FV.hotspots.canvasClickToYawPitch(x, y); }
+
+// ══════════════════════════════════════════════════
+// NODES MODULE (FV.nodes)
+// ══════════════════════════════════════════════════
+FV.nodes = {
+  // ── State ──
+  pendingNodeImage: null,
+  renameTargetIdx: -1,
+
+  triggerAdd() {
+    if (!currentRoute()) { openNewRouteModal(); return; }
+    const nextNum = currentNodes().length + 1;
+    document.getElementById('newNodeName').value = '';
+    document.getElementById('newNodeDesc').value  = '';
+    document.getElementById('nodeFileLabel').textContent = 'Choose image file...';
+    document.getElementById('addNodeModalSub').textContent = `Adding Node ${String(nextNum).padStart(2,'0')} to "${currentRoute().name}"`;
+    document.getElementById('confirmNodeBtn').disabled = false;
+    FV.nodes.pendingNodeImage = null;
+    FV.modals.open('modalAddNode');
+    setTimeout(() => document.getElementById('newNodeName').focus(), 100);
+  },
+
+  cancelAdd() {
+    FV.nodes.pendingNodeImage = null;
+    FV.modals.close('modalAddNode');
+  },
+
+  confirmAdd() {
+    const name = document.getElementById('newNodeName').value.trim() || ('Node ' + (currentNodes().length + 1));
+    const nodes = currentNodes();
+    const node = {
+      id: 'N' + String(nodes.length + 1).padStart(2,'0'),
+      name,
+      desc: document.getElementById('newNodeDesc').value.trim(),
+      image: FV.nodes.pendingNodeImage || null,
+      mapX: null, mapY: null,
+      floorId: null,
+      connections: [],
+      hotspots: [],
+      navArrowColor: null,
+      quiz: null
+    };
+    if (nodes.length >= 1) {
+      const prev = nodes[nodes.length - 1];
+      prev.connections.push(node.id);
+      node.connections.push(prev.id);
+    }
+    nodes.push(node);
+    FV.nodes.pendingNodeImage = null;
+    FV.modals.close('modalAddNode');
+    rebuildRouteSelect(); FV.nodes.buildSidebar(); drawMinimap(); FV.nodes.updateNodeCount();
+    navigateTo(nodes.length - 1);
+    saveRoutes();
+  },
+
+  openRenameModal(nodeIdx) {
+    const node = currentNodes()[nodeIdx]; if (!node) return;
+    FV.nodes.renameTargetIdx = nodeIdx;
+    document.getElementById('renameNodeName').value = node.name;
+    document.getElementById('renameNodeDesc').value  = node.desc || '';
+    document.getElementById('renameNodeSub').textContent = `Editing Node ${String(nodeIdx+1).padStart(2,'0')}`;
+    document.getElementById('renameNodeImageLabel').textContent = node.image ? 'Image attached — click to replace' : 'No image — click to add';
+    document.getElementById('btnRemoveNodeImage').style.display = node.image ? '' : 'none';
+    document.getElementById('navArrowColorInput').value = node.navArrowColor || '#f0a500';
+    const quizContent = document.getElementById('quizEditorContent');
+    const quizToggle  = document.getElementById('quizToggleLabel');
+    if (node.quiz) {
+      quizContent.style.display = 'flex';
+      quizToggle.textContent = '− Remove';
+      document.getElementById('quizQText').value = node.quiz.question || '';
+      ['quizOpt0','quizOpt1','quizOpt2','quizOpt3'].forEach((id, i) => {
+        document.getElementById(id).value = node.quiz.options[i] || '';
+      });
+      document.getElementById('quizCorrectSelect').value = node.quiz.correctIndex ?? 0;
+      document.getElementById('quizExplText').value = node.quiz.explanation || '';
+    } else {
+      quizContent.style.display = 'none';
+      quizToggle.textContent = '+ Add Question';
+      document.getElementById('quizQText').value = '';
+      ['quizOpt0','quizOpt1','quizOpt2','quizOpt3'].forEach(id => document.getElementById(id).value = '');
+      document.getElementById('quizCorrectSelect').value = '0';
+      document.getElementById('quizExplText').value = '';
+    }
+    FV.nodes.refreshModalConnections();
+    FV.modals.open('modalRenameNode');
+    setTimeout(() => document.getElementById('renameNodeName').focus(), 100);
+  },
+
+  refreshModalConnections() {
+    if (FV.nodes.renameTargetIdx < 0) return;
+    const nodes   = currentNodes();
+    const node    = nodes[FV.nodes.renameTargetIdx]; if (!node) return;
+    const route   = currentRoute();
+    const conns   = node.connections || [];
+    const listEl  = document.getElementById('modalConnList');
+    const clearEl = document.getElementById('modalConnClearAll');
+    const selEl   = document.getElementById('modalConnTarget');
+    listEl.innerHTML = conns.length ? '' : '<div style="font-family:var(--mono);font-size:9px;color:var(--muted);padding:3px 0;">No connections yet</div>';
+    conns.forEach(cid => {
+      const cn = nodes.find(n => n.id === cid); if (!cn) return;
+      const cross = cn.floorId !== node.floorId ? ' ⬍' : '';
+      const floorName = (route?.floors || []).find(f => f.id === cn.floorId)?.name || '';
+      const row = document.createElement('div');
+      row.style.cssText = 'display:flex;align-items:center;gap:6px;padding:4px 7px;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:2px;';
+      const escapedBadge = floorName ? ` [${escapeHtml(floorName)}]` : '';
+      row.innerHTML = `<span style="flex:1;font-family:var(--mono);font-size:9px;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(cn.id)}: ${escapeHtml(cn.name)}${cross}<em style="opacity:.5;font-style:normal;">${escapedBadge}</em></span>`;
+      const removeBtn = document.createElement('span');
+      removeBtn.textContent = '×';
+      removeBtn.style.cssText = 'font-size:14px;color:var(--muted);cursor:pointer;line-height:1;flex-shrink:0;';
+      removeBtn.title = 'Remove connection';
+      removeBtn.addEventListener('click', () => FV.nodes.removeConnectionFromModal(cid));
+      row.appendChild(removeBtn);
+      listEl.appendChild(row);
+    });
+    clearEl.style.display = conns.length ? '' : 'none';
+    selEl.innerHTML = '<option value="">— Select node to connect —</option>';
+    nodes.forEach((n, i) => {
+      if (i === FV.nodes.renameTargetIdx) return;
+      if (conns.includes(n.id)) return;
+      const cross = n.floorId !== node.floorId ? ' ⬍' : '';
+      const floorName = (route?.floors || []).find(f => f.id === n.floorId)?.name || '';
+      const badge = floorName ? ` [${floorName}]` : '';
+      const opt = document.createElement('option');
+      opt.value = n.id;
+      opt.textContent = `${n.id}: ${n.name}${cross}${badge}`;
+      selEl.appendChild(opt);
+    });
+  },
+
+  addConnectionFromModal() {
+    const targetId = document.getElementById('modalConnTarget').value; if (!targetId) return;
+    const nodes = currentNodes();
+    const node  = nodes[FV.nodes.renameTargetIdx]; if (!node) return;
+    if (!FV.connections.add(nodes, node.id, targetId)) return;
+    FV.nodes.refreshModalConnections();
+    if (mapEditorOpen) { buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor(); }
+    if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
+    drawMinimap(); saveRoutes();
+  },
+
+  removeConnectionFromModal(targetId) {
+    const nodes = currentNodes();
+    const node  = nodes[FV.nodes.renameTargetIdx]; if (!node) return;
+    FV.connections.remove(nodes, node.id, targetId);
+    FV.nodes.refreshModalConnections();
+    if (mapEditorOpen) { buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor(); }
+    if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
+    drawMinimap(); saveRoutes();
+  },
+
+  removeAllConnectionsFromModal() {
+    const nodes = currentNodes();
+    const node  = nodes[FV.nodes.renameTargetIdx]; if (!node) return;
+    if (!(node.connections || []).length) return;
+    if (!confirm(`Remove all ${node.connections.length} connection(s) from ${node.name}?`)) return;
+    FV.connections.removeAll(nodes, node.id);
+    FV.nodes.refreshModalConnections();
+    if (mapEditorOpen) { buildEditorNodeList(); updateSelectedNodeInfo(); drawMapEditor(); }
+    if (currentNodeIdx >= 0) buildHotspots(currentNodeIdx);
+    drawMinimap(); saveRoutes();
+  },
+
+  removeNodeImage() {
+    const node = currentNodes()[FV.nodes.renameTargetIdx]; if (!node) return;
+    if (!confirm('Remove the panorama from this node?')) return;
+    node.image = null; node.thumbUrl = null;
+    document.getElementById('renameNodeImageLabel').textContent = 'No image — click to add';
+    document.getElementById('btnRemoveNodeImage').style.display = 'none';
+    if (FV.nodes.renameTargetIdx === currentNodeIdx) { img = null; renderFrame(); }
+    FV.nodes.buildSidebar();
+    saveRoutes();
+  },
+
+  confirmRenameNode() {
+    if (FV.nodes.renameTargetIdx < 0) return;
+    const node = currentNodes()[FV.nodes.renameTargetIdx]; if (!node) return;
+    node.name = document.getElementById('renameNodeName').value.trim() || node.name;
+    node.desc = document.getElementById('renameNodeDesc').value.trim();
+    const pickedColor = document.getElementById('navArrowColorInput').value;
+    node.navArrowColor = (pickedColor && pickedColor.toLowerCase() !== '#f0a500') ? pickedColor : null;
+    if (document.getElementById('quizEditorContent').style.display !== 'none') {
+      const qText = document.getElementById('quizQText').value.trim();
+      const opts   = [0,1,2,3].map(i => document.getElementById('quizOpt'+i).value.trim());
+      if (qText && opts.every(o => o)) {
+        node.quiz = {
+          question: qText,
+          options: opts,
+          correctIndex: parseInt(document.getElementById('quizCorrectSelect').value) || 0,
+          explanation: document.getElementById('quizExplText').value.trim()
+        };
+      } else if (qText || opts.some(o => o)) {
+        alert('Quiz not saved: please fill in the question and all 4 answer options, or clear all fields to remove the quiz.');
+        return;
+      } else {
+        node.quiz = null;
+      }
+    } else {
+      node.quiz = null;
+    }
+    FV.modals.close('modalRenameNode');
+    FV.nodes.buildSidebar(); drawMinimap();
+    if (FV.nodes.renameTargetIdx === currentNodeIdx) { updateHeaders(node, FV.nodes.renameTargetIdx); buildHotspots(FV.nodes.renameTargetIdx); }
+    if (mapEditorOpen) { buildEditorNodeList(); drawMapEditor(); }
+    FV.nodes.renameTargetIdx = -1;
+    saveRoutes();
+  },
+
+  deleteNode(nodeIdx) {
+    const nodes = currentNodes();
+    if (nodeIdx < 0 || nodeIdx >= nodes.length) return;
+    if (!confirm(`Delete Node ${String(nodeIdx+1).padStart(2,'0')}: "${nodes[nodeIdx].name}"?`)) return;
+    const deletedId = nodes[nodeIdx].id;
+    nodes.splice(nodeIdx, 1);
+    const oldIds = nodes.map((n, i) => { const old = n.id; n.id = 'N' + String(i+1).padStart(2,'0'); return { old, newId: n.id }; });
+    const idMap = {};
+    oldIds.forEach(({ old, newId }) => { idMap[old] = newId; });
+    nodes.forEach(n => {
+      n.connections = (n.connections || []).filter(id => id !== deletedId).map(id => idMap[id] || id);
+    });
+    nodes.forEach(n => {
+      n.hotspots = (n.hotspots || []).filter(h => !(h.type === 'link' && h.content === deletedId));
+      n.hotspots.forEach(h => { if (h.type === 'link' && idMap[h.content]) h.content = idMap[h.content]; });
+    });
+    FV.nodes.buildSidebar(); rebuildRouteSelect(); drawMinimap(); FV.nodes.updateNodeCount();
+    if (mapEditorOpen) { buildEditorNodeList(); drawMapEditor(); }
+    if (!nodes.length) {
+      currentNodeIdx = -1; img = null;
+      document.getElementById('overlay').style.opacity = '0';
+      clearViewer();
+    } else {
+      navigateTo(Math.min(nodeIdx, nodes.length - 1));
+    }
+    saveRoutes();
+  },
+
+  duplicateNode(nodeIdx) {
+    const nodes = currentNodes();
+    const src = nodes[nodeIdx]; if (!src) return;
+    const newId = 'N' + String(nodes.length + 1).padStart(2, '0');
+    const copy = {
+      id: newId, name: src.name + ' (copy)', desc: src.desc,
+      image: src.image, thumbUrl: src.thumbUrl || null,
+      mapX: src.mapX !== null ? src.mapX + 20 : null,
+      mapY: src.mapY !== null ? src.mapY + 20 : null,
+      floorId: src.floorId || null, connections: [],
+      hotspots: (src.hotspots || []).map(h => ({ ...h, id: 'HS' + Date.now() + Math.random().toString(36).slice(2,6) })),
+      navArrowColor: src.navArrowColor || null,
+      quiz: src.quiz ? { ...src.quiz, options: [...src.quiz.options] } : null
+    };
+    nodes.push(copy);
+    FV.nodes.buildSidebar(); rebuildRouteSelect(); drawMinimap(); FV.nodes.updateNodeCount();
+    if (mapEditorOpen) { buildEditorNodeList(); drawMapEditor(); }
+    navigateTo(nodes.length - 1);
+    saveRoutes();
+  },
+
+  filterSidebarNodes(query) {
+    const q = query.toLowerCase().trim();
+    document.querySelectorAll('#locationList .loc-item').forEach(el => {
+      const name = (el.querySelector('.loc-name')?.textContent || '').toLowerCase();
+      const desc = (el.querySelector('.loc-desc')?.textContent || '').toLowerCase();
+      const id = (el.querySelector('.loc-node-num')?.textContent || '').toLowerCase();
+      el.style.display = (!q || name.includes(q) || desc.includes(q) || id.includes(q)) ? '' : 'none';
+    });
+  },
+
+  updateNodeCount() {
+    document.getElementById('nodeCountVal').textContent = currentNodes().length;
+  },
+
+  getThumbnail(node) {
+    if (node.thumbUrl) return node.thumbUrl;
+    if (!node.image || !node.image.complete || !node.image.naturalWidth) return null;
+    const tw = 96, th = 60;
+    const tmp = document.createElement('canvas');
+    tmp.width = tw; tmp.height = th;
+    const tctx = tmp.getContext('2d');
+    const iw = node.image.naturalWidth, ih = node.image.naturalHeight;
+    const cropW = Math.round(iw / 4);
+    const cropH = Math.round(ih / 3);
+    const cropX = Math.round((iw - cropW) / 2);
+    const cropY = Math.round((ih - cropH) / 2);
+    tctx.drawImage(node.image, cropX, cropY, cropW, cropH, 0, 0, tw, th);
+    node.thumbUrl = tmp.toDataURL('image/jpeg', 0.75);
+    return node.thumbUrl;
+  },
+
+  buildSidebar() {
+    const list  = document.getElementById('locationList');
+    const nodes = currentNodes();
+    list.innerHTML = '';
+    if (!nodes.length) {
+      list.innerHTML = '<div style="padding:16px 14px;font-family:var(--mono);font-size:10px;color:var(--muted);line-height:1.8;letter-spacing:1px;">No nodes yet. Click "Add Node" to add your first panorama.</div>';
+      return;
+    }
+    nodes.forEach((node, i) => {
+      const thumb = FV.nodes.getThumbnail(node);
+      const el = document.createElement('div');
+      el.className = 'loc-item' + (i === currentNodeIdx ? ' active' : '');
+      el.draggable = true;
+      el.dataset.idx = i;
+      el.innerHTML = `
+        <div class="loc-drag-handle" title="Drag to reorder">&#8801;</div>
+        <div class="loc-node-num">N${String(i+1).padStart(2,'0')}</div>
+        <div class="loc-thumb-wrap">${thumb ? `<img class="loc-thumb" src="${thumb}">` : ''}</div>
+        <div class="loc-info">
+          <div class="loc-name">${escapeHtml(node.name)}</div>
+          ${node.desc ? `<div class="loc-desc">${escapeHtml(node.desc)}</div>` : ''}
+        </div>
+        ${node.quiz ? `<span class="loc-quiz-badge" title="Quiz question at this node">Q</span>` : ''}
+        <div class="loc-actions">
+          <button class="loc-action-btn" title="Rename" onclick="event.stopPropagation();openRenameModal(${i})">
+            <svg viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
+          </button>
+          <button class="loc-action-btn" title="Duplicate" onclick="event.stopPropagation();duplicateNode(${i})">
+            <svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/></svg>
+          </button>
+          <button class="loc-action-btn danger" title="Delete" onclick="event.stopPropagation();deleteNode(${i})">
+            <svg viewBox="0 0 24 24"><path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
+          </button>
+        </div>`;
+      el.addEventListener('click', () => navigateTo(i));
+      el.addEventListener('dragstart', e => {
+        e.dataTransfer.effectAllowed = 'move';
+        e.dataTransfer.setData('text/plain', i);
+        setTimeout(() => el.style.opacity = '0.4', 0);
+      });
+      el.addEventListener('dragend', () => { el.style.opacity = ''; list.querySelectorAll('.loc-item').forEach(x => x.classList.remove('drag-over')); });
+      el.addEventListener('dragover', e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; list.querySelectorAll('.loc-item').forEach(x => x.classList.remove('drag-over')); el.classList.add('drag-over'); });
+      el.addEventListener('dragleave', () => el.classList.remove('drag-over'));
+      el.addEventListener('drop', e => {
+        e.preventDefault();
+        const fromIdx = parseInt(e.dataTransfer.getData('text/plain'), 10);
+        const toIdx   = parseInt(el.dataset.idx, 10);
+        if (fromIdx === toIdx) return;
+        FV.nodes.reorderNode(fromIdx, toIdx);
+      });
+      list.appendChild(el);
+    });
+  },
+
+  reorderNode(fromIdx, toIdx) {
+    const nodes = currentNodes();
+    const activeNode = nodes[currentNodeIdx] || null;
+    const [moved] = nodes.splice(fromIdx, 1);
+    nodes.splice(toIdx, 0, moved);
+    const oldIds = nodes.map((n, i) => { const old = n.id; n.id = 'N' + String(i+1).padStart(2,'0'); return { old, newId: n.id }; });
+    const idMap = {};
+    oldIds.forEach(({ old, newId }) => { idMap[old] = newId; });
+    nodes.forEach(n => { if (n.connections) n.connections = n.connections.map(cid => idMap[cid] || cid); });
+    nodes.forEach(n => {
+      (n.hotspots || []).forEach(h => { if (h.type === 'link' && idMap[h.content]) h.content = idMap[h.content]; });
+    });
+    if (activeNode) currentNodeIdx = nodes.indexOf(activeNode);
+    FV.nodes.buildSidebar();
+    drawMinimap();
+    if (mapEditorOpen) { buildEditorNodeList(); drawMapEditor(); }
+    saveRoutes();
+  }
+};
+// Backward-compat shims
+function triggerAddNode()                    { FV.nodes.triggerAdd(); }
+function cancelAddNode()                     { FV.nodes.cancelAdd(); }
+function confirmAddNode()                    { FV.nodes.confirmAdd(); }
+function openRenameModal(idx)                { FV.nodes.openRenameModal(idx); }
+function refreshModalConnections()           { FV.nodes.refreshModalConnections(); }
+function addConnectionFromModal()            { FV.nodes.addConnectionFromModal(); }
+function removeConnectionFromModal(targetId) { FV.nodes.removeConnectionFromModal(targetId); }
+function removeAllConnectionsFromModal()     { FV.nodes.removeAllConnectionsFromModal(); }
+function removeNodeImage()                   { FV.nodes.removeNodeImage(); }
+function confirmRenameNode()                 { FV.nodes.confirmRenameNode(); }
+function deleteNode(idx)                     { FV.nodes.deleteNode(idx); }
+function duplicateNode(idx)                  { FV.nodes.duplicateNode(idx); }
+function filterSidebarNodes(q)               { FV.nodes.filterSidebarNodes(q); }
+function updateNodeCount()                   { FV.nodes.updateNodeCount(); }
+function getThumbnail(node)                  { return FV.nodes.getThumbnail(node); }
+function buildSidebar()                      { FV.nodes.buildSidebar(); }
+function reorderNode(from, to)               { FV.nodes.reorderNode(from, to); }
 
 // ══════════════════════════════════════════════════
 // DEMO DATA
