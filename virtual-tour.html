@@ -1337,8 +1337,8 @@ function uid(prefix) { return prefix + (typeof crypto !== 'undefined' && crypto.
 // ══════════════════════════════════════════════════
 // SIDEBAR TOGGLE
 // ══════════════════════════════════════════════════
-let sidebarOpen = true;
-document.getElementById('sidebarToggle').addEventListener('click', toggleSidebar);
+// Sidebar state — now managed by FV.sidebar module (see below)
+document.getElementById('sidebarToggle').addEventListener('click', () => FV.sidebar.toggle());
 function toggleSidebar() {
   sidebarOpen = !sidebarOpen;
   document.getElementById('sidebar').classList.toggle('collapsed', !sidebarOpen);
@@ -4462,7 +4462,7 @@ FV.routes = {
     document.getElementById('sidebarRouteBadge').textContent = route ? route.name : 'NO ROUTE';
     document.getElementById('routeSelect').value = idx;
     FV.nodes.buildSidebar(); drawMinimap(); FV.nodes.updateNodeCount();
-    if (sidebarView === 'docs') buildDocList();
+    if (FV.sidebar && FV.sidebar.view === 'docs') buildDocList();
     document.getElementById('overlay').style.opacity = '0';
     document.getElementById('hotspots').style.opacity = '0';
     clearViewer();
@@ -4476,6 +4476,126 @@ function duplicateRoute()     { FV.routes.duplicateRoute(); }
 function deleteRoute()        { FV.routes.deleteRoute(); }
 function rebuildRouteSelect() { FV.routes.rebuildRouteSelect(); }
 function selectRoute(idx)     { FV.routes.selectRoute(idx); }
+
+// ══════════════════════════════════════════════════
+// SIDEBAR MODULE (FV.sidebar)
+// ══════════════════════════════════════════════════
+FV.sidebar = {
+  // ── State ──
+  open: true,
+  view: 'nodes',    // 'nodes' | 'docs'
+  docPanelOpen: false,
+
+  toggle() {
+    FV.sidebar.open = !FV.sidebar.open;
+    document.getElementById('sidebar').classList.toggle('collapsed', !FV.sidebar.open);
+    setTimeout(resizeCanvas, 260);
+  },
+
+  getSidebarWidthConstraints() {
+    const min = 200;
+    const max = Math.max(min, Math.min(720, window.innerWidth - 120));
+    return { min, max };
+  },
+
+  clampSidebarWidth(px) {
+    const { min, max } = FV.sidebar.getSidebarWidthConstraints();
+    return Math.min(max, Math.max(min, Math.round(px)));
+  },
+
+  setSidebarWidthPx(px, persist) {
+    const w = FV.sidebar.clampSidebarWidth(px);
+    document.documentElement.style.setProperty('--sidebar-w', w + 'px');
+    if (persist) {
+      try { localStorage.setItem('facilityview_sidebar_w', String(w)); } catch (e) { /* ignore */ }
+    }
+    return w;
+  },
+
+  applyStoredWidth() {
+    let px = 260;
+    try {
+      const raw = localStorage.getItem('facilityview_sidebar_w');
+      if (raw != null && raw !== '') {
+        const n = parseInt(raw, 10);
+        if (!Number.isNaN(n)) px = n;
+      }
+    } catch (e) { /* ignore */ }
+    FV.sidebar.setSidebarWidthPx(px, false);
+  },
+
+  initResize() {
+    FV.sidebar.applyStoredWidth();
+    const sidebarEl = document.getElementById('sidebar');
+    const handle = document.getElementById('sidebarResizeHandle');
+    if (!handle) return;
+    let dragActive = false, startX = 0, startW = 0;
+    function onMove(clientX) {
+      FV.sidebar.setSidebarWidthPx(startW + (clientX - startX), false);
+      resizeCanvas();
+    }
+    function endDrag() {
+      if (!dragActive) return;
+      dragActive = false;
+      sidebarEl.classList.remove('resizing');
+      const { min, max } = FV.sidebar.getSidebarWidthConstraints();
+      const cur = sidebarEl.getBoundingClientRect().width;
+      FV.sidebar.setSidebarWidthPx(Math.min(max, Math.max(min, cur)), true);
+      resizeCanvas();
+    }
+    handle.addEventListener('pointerdown', e => {
+      if (e.button != null && e.button !== 0) return;
+      if (sidebarEl.classList.contains('collapsed')) return;
+      e.preventDefault();
+      dragActive = true; startX = e.clientX; startW = sidebarEl.getBoundingClientRect().width;
+      sidebarEl.classList.add('resizing');
+      try { handle.setPointerCapture(e.pointerId); } catch (err) { /* ignore */ }
+    });
+    handle.addEventListener('pointermove', e => { if (dragActive) onMove(e.clientX); });
+    handle.addEventListener('pointerup', e => {
+      if (dragActive) { try { handle.releasePointerCapture(e.pointerId); } catch (err) {} endDrag(); }
+    });
+    handle.addEventListener('pointercancel', e => {
+      if (dragActive) { try { handle.releasePointerCapture(e.pointerId); } catch (err) {} endDrag(); }
+    });
+    handle.addEventListener('dblclick', e => {
+      e.preventDefault();
+      if (sidebarEl.classList.contains('collapsed')) return;
+      FV.sidebar.setSidebarWidthPx(260, true);
+      resizeCanvas();
+    });
+    window.addEventListener('resize', () => {
+      const raw = getComputedStyle(document.documentElement).getPropertyValue('--sidebar-w').trim();
+      let n = parseFloat(raw);
+      if (Number.isNaN(n)) n = 260;
+      FV.sidebar.setSidebarWidthPx(n, false);
+      resizeCanvas();
+    });
+  },
+
+  switchView(mode) {
+    FV.sidebar.view = mode;
+    FV.sidebar.docPanelOpen = mode === 'docs';
+    if (!FV.sidebar.open) FV.sidebar.toggle();
+    document.getElementById('sidebarNodesView').style.display = mode === 'nodes' ? '' : 'none';
+    const docsEl = document.getElementById('sidebarDocsView');
+    docsEl.style.display = mode === 'docs' ? 'flex' : 'none';
+    document.getElementById('tabNodes').classList.toggle('active', mode === 'nodes');
+    document.getElementById('tabDocs').classList.toggle('active', mode === 'docs');
+    const btn = document.getElementById('btnDocs');
+    if (btn) btn.classList.toggle('hotspot-edit-active', mode === 'docs');
+    if (mode === 'docs') buildDocList();
+  },
+
+  toggleDocPanel() {
+    FV.sidebar.switchView(FV.sidebar.docPanelOpen ? 'nodes' : 'docs');
+  }
+};
+// Backward-compat shims
+function toggleSidebar()          { FV.sidebar.toggle(); }
+function switchSidebarView(mode)  { FV.sidebar.switchView(mode); }
+function toggleDocPanel()         { FV.sidebar.toggleDocPanel(); }
+function initSidebarResize()      { FV.sidebar.initResize(); }
 
 // ══════════════════════════════════════════════════
 // DEMO DATA
@@ -5015,8 +5135,7 @@ document.addEventListener('keydown', e => {
 // ══════════════════════════════════════════════════
 // DOCUMENTS / SOP PANEL
 // ══════════════════════════════════════════════════
-let docPanelOpen = false;
-let sidebarView = 'nodes'; // 'nodes' | 'docs'
+// Sidebar view state — now managed by FV.sidebar module (see below)
 let _editingDocId = null;
 let _pendingDocFile = null;
 
