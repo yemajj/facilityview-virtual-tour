@@ -42,7 +42,7 @@ FV.moduleName = {
 
 ## Progress
 
-### ✅ Completed (9 / 17)
+### ✅ Completed (11 / 17)
 
 | # | Module | Commit | Notes |
 |---|--------|--------|-------|
@@ -55,8 +55,10 @@ FV.moduleName = {
 | 7 | `FV.connections` | `ec18b83` | Bidirectional graph CRUD: `add`, `remove`, `removeAll`, `toggle`. Refactored 5 callers + map-editor connect tool to delegate. Pure version still in `virtual-tour-utils.js` for tests |
 | 8 | `FV.hotspots` | `6d0bb3c` | Hotspot DOM build/position, nav arrow drag, custom hotspot CRUD modals, manage panel, lightbox, info popup, reposition mode, helper arrows. State: `editMode`, `pendingYaw/Pitch`, `editingId`, `repositioningId`, `pendingFileData` |
 | 9 | `FV.nodes` | `74b03c5` | Node CRUD, add/rename/delete/duplicate modals, sidebar build+drag-reorder, thumbnail generation, connection modal, filterSidebar. State: `pendingNodeImage`, `renameTargetIdx` |
+| 10 | `FV.routes` | `f690715` | Route CRUD, selection, duplication. No owned state. |
+| 11 | `FV.sidebar` | `f690715` | Toggle, drag-resize, tab switching (nodes/docs), docPanel. State: `open`, `view`, `docPanelOpen` |
 
-### ⏳ Remaining (8 / 17)
+### ⏳ Remaining (6 / 17)
 
 In recommended extraction order (safest dependencies first):
 
@@ -152,4 +154,4 @@ sidebarOpen, sidebarView                       → FV.sidebar
 7. Follow the Migration Pattern above.
 8. Commit + push + update this file.
 
-**Current next step:** Extract `FV.routes` (Step 10). Key functions: `openNewRouteModal`, `confirmNewRoute`, `deleteRoute`, `duplicateRoute`, `rebuildRouteSelect`, `selectRoute`. No owned state (routes[] stays global until FV.navigation).
+**Current next step:** Extract `FV.minimap` (Step 12). Key functions: `drawMinimap`, `toggleMinimapMinimize`, `toMM()` helper. State: `minimapMinimized` (currently not a bare global — check implementation).
